@@ -80,8 +80,11 @@ impl TransmitterState {
 pub struct NeurotransmitterProfile {
     /// Serotonin (5-HT) — mood baseline, impulse control.
     pub serotonin: TransmitterState,
-    /// Dopamine (DA) — reward, motivation, preference.
+    /// Dopamine (DA) — tonic level: sustained motivation, effort, Go/NoGo balance.
     pub dopamine: TransmitterState,
+    /// Dopamine phasic burst (−1.0 to +1.0). Transient RPE signal from VTA.
+    /// Positive = better-than-expected reward, negative = worse. Decays rapidly.
+    pub dopamine_phasic: f32,
     /// Norepinephrine (NE) — arousal, alertness, fight-or-flight.
     pub norepinephrine: TransmitterState,
     /// GABA — primary inhibitory, anxiolytic.
@@ -103,6 +106,7 @@ impl Default for NeurotransmitterProfile {
         Self {
             serotonin: TransmitterState::at_baseline(0.5, 0.02, 0.03),
             dopamine: TransmitterState::at_baseline(0.4, 0.03, 0.05),
+            dopamine_phasic: 0.0,
             norepinephrine: TransmitterState::at_baseline(0.3, 0.04, 0.06),
             gaba: TransmitterState::at_baseline(0.5, 0.03, 0.03),
             glutamate: TransmitterState::at_baseline(0.5, 0.04, 0.04),
@@ -132,7 +136,23 @@ impl NeurotransmitterProfile {
         self.endorphins.tick_unchecked(dt);
         self.acetylcholine.tick_unchecked(dt);
         self.bdnf.tick_unchecked(dt);
+        // Phasic DA decays rapidly (transient burst, ~500ms half-life)
+        self.dopamine_phasic *= (-dt / 0.5).exp();
         Ok(())
+    }
+
+    /// Fire a phasic dopamine burst (reward prediction error signal).
+    ///
+    /// Positive values = better-than-expected reward, negative = disappointment.
+    /// Decays rapidly during `tick_all`.
+    #[inline]
+    pub fn fire_dopamine_burst(&mut self, magnitude: f32) {
+        self.dopamine_phasic = (self.dopamine_phasic + magnitude).clamp(-1.0, 1.0);
+        tracing::debug!(
+            magnitude,
+            phasic = self.dopamine_phasic,
+            "dopamine burst fired"
+        );
     }
 
     /// GABA/glutamate ratio — >1.0 = inhibition dominant, <1.0 = excitation dominant.

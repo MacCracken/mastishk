@@ -193,9 +193,9 @@ fn test_stress_rumination_feedback() {
     brain.dmn.rumination = 0.8;
     let initial_cortisol = brain.hpa.cortisol;
 
-    // Tick for a while — rumination should drive cortisol up
-    for _ in 0..200 {
-        brain.tick(1.0).unwrap();
+    // Tick for 2 hours — rumination drives cortisol up (realistic cascade timing)
+    for _ in 0..120 {
+        brain.tick(60.0).unwrap();
     }
     assert!(brain.hpa.cortisol > initial_cortisol);
     // Allostatic load should accumulate from chronic stress

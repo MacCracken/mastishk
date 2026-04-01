@@ -152,6 +152,7 @@ impl BrainState {
             &mut self.pfc,
             &self.hpa,
             &self.sleep,
+            &self.amygdala,
             dt,
         )?;
 

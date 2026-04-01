@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{MastishkError, validate_dt};
 use crate::neurotransmitter::NeurotransmitterProfile;
-use crate::receptor::{ReceptorMap, ReceptorOccupancies, ReceptorSubtype};
+use crate::receptor::{ReceptorMap, ReceptorOccupancies, ReceptorSubtype, TransporterType};
 
 // ── Math Utilities ─────────────────────────────────────────────────
 
@@ -60,13 +60,29 @@ pub struct ReceptorBinding {
     pub mechanism: DrugMechanism,
 }
 
+/// A drug's binding profile for a reuptake transporter.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransporterBinding {
+    /// Target transporter.
+    pub transporter: TransporterType,
+    /// Half-maximal effective concentration (normalized 0.0–1.0).
+    pub ec50: f32,
+    /// Hill coefficient (steepness of dose-response curve).
+    pub hill_coeff: f32,
+    /// Maximal reuptake inhibition (0.0–1.0).
+    pub emax: f32,
+}
+
 /// Static pharmacological profile of a drug compound.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrugProfile {
     /// Drug name.
     pub name: String,
-    /// Receptor binding affinities and mechanisms.
+    /// Receptor binding affinities and mechanisms (agonist, antagonist, PAM).
     pub bindings: Vec<ReceptorBinding>,
+    /// Transporter binding affinities (reuptake inhibition).
+    #[serde(default)]
+    pub transporter_bindings: Vec<TransporterBinding>,
     /// Plasma elimination half-life (seconds).
     pub half_life: f32,
     /// Time to peak absorption (seconds).
@@ -74,53 +90,35 @@ pub struct DrugProfile {
 }
 
 impl DrugProfile {
-    /// Fluoxetine (Prozac) — SSRI. Long half-life, serotonin reuptake inhibitor.
+    /// Fluoxetine (Prozac) — SSRI. Blocks serotonin transporter (SERT).
     #[must_use]
     pub fn ssri_fluoxetine() -> Self {
         Self {
             name: "fluoxetine".into(),
-            bindings: vec![
-                ReceptorBinding {
-                    receptor: ReceptorSubtype::Ht1a,
-                    ec50: 0.10,
-                    hill_coeff: 1.5,
-                    emax: 0.85,
-                    mechanism: DrugMechanism::ReuptakeInhibitor,
-                },
-                ReceptorBinding {
-                    receptor: ReceptorSubtype::Ht2a,
-                    ec50: 0.12,
-                    hill_coeff: 1.5,
-                    emax: 0.80,
-                    mechanism: DrugMechanism::ReuptakeInhibitor,
-                },
-            ],
+            bindings: Vec::new(),
+            transporter_bindings: vec![TransporterBinding {
+                transporter: TransporterType::Sert,
+                ec50: 0.10,
+                hill_coeff: 1.5,
+                emax: 0.85,
+            }],
             half_life: 86_400.0, // ~1 day (active metabolite much longer)
             onset_delay: 3600.0, // 1 hour absorption
         }
     }
 
-    /// Sertraline (Zoloft) — SSRI. More selective than fluoxetine.
+    /// Sertraline (Zoloft) — SSRI. More selective SERT blocker.
     #[must_use]
     pub fn ssri_sertraline() -> Self {
         Self {
             name: "sertraline".into(),
-            bindings: vec![
-                ReceptorBinding {
-                    receptor: ReceptorSubtype::Ht1a,
-                    ec50: 0.08,
-                    hill_coeff: 1.8,
-                    emax: 0.90,
-                    mechanism: DrugMechanism::ReuptakeInhibitor,
-                },
-                ReceptorBinding {
-                    receptor: ReceptorSubtype::Ht2a,
-                    ec50: 0.10,
-                    hill_coeff: 1.8,
-                    emax: 0.85,
-                    mechanism: DrugMechanism::ReuptakeInhibitor,
-                },
-            ],
+            bindings: Vec::new(),
+            transporter_bindings: vec![TransporterBinding {
+                transporter: TransporterType::Sert,
+                ec50: 0.08,
+                hill_coeff: 1.8,
+                emax: 0.90,
+            }],
             half_life: 93_600.0, // ~26 hours
             onset_delay: 3600.0,
         }
@@ -138,6 +136,7 @@ impl DrugProfile {
                 emax: 0.80,
                 mechanism: DrugMechanism::PositiveAllostericModulator,
             }],
+            transporter_bindings: Vec::new(),
             half_life: 172_800.0, // ~2 days
             onset_delay: 1800.0,  // 30 min
         }
@@ -155,44 +154,47 @@ impl DrugProfile {
                 emax: 0.90,
                 mechanism: DrugMechanism::PositiveAllostericModulator,
             }],
+            transporter_bindings: Vec::new(),
             half_life: 21_600.0, // ~6 hours
             onset_delay: 900.0,  // 15 min
         }
     }
 
-    /// Amphetamine — stimulant. DA/NE agonist (release + reuptake block).
+    /// Amphetamine — stimulant. Vesicular DA/NE releaser + DAT/NET reuptake blocker.
     #[must_use]
     pub fn stimulant_amphetamine() -> Self {
         Self {
             name: "amphetamine".into(),
+            // Amphetamine acts as an indirect agonist via vesicular release
             bindings: vec![
                 ReceptorBinding {
                     receptor: ReceptorSubtype::D1,
-                    ec50: 0.12,
-                    hill_coeff: 1.5,
-                    emax: 0.85,
-                    mechanism: DrugMechanism::Agonist,
-                },
-                ReceptorBinding {
-                    receptor: ReceptorSubtype::D2,
                     ec50: 0.15,
                     hill_coeff: 1.5,
-                    emax: 0.70,
-                    mechanism: DrugMechanism::Agonist,
-                },
-                ReceptorBinding {
-                    receptor: ReceptorSubtype::Alpha1,
-                    ec50: 0.20,
-                    hill_coeff: 1.3,
                     emax: 0.60,
                     mechanism: DrugMechanism::Agonist,
                 },
                 ReceptorBinding {
-                    receptor: ReceptorSubtype::Beta,
-                    ec50: 0.25,
-                    hill_coeff: 1.3,
-                    emax: 0.50,
+                    receptor: ReceptorSubtype::D2,
+                    ec50: 0.18,
+                    hill_coeff: 1.5,
+                    emax: 0.45,
                     mechanism: DrugMechanism::Agonist,
+                },
+            ],
+            // Also blocks reuptake transporters
+            transporter_bindings: vec![
+                TransporterBinding {
+                    transporter: TransporterType::Dat,
+                    ec50: 0.12,
+                    hill_coeff: 1.5,
+                    emax: 0.85,
+                },
+                TransporterBinding {
+                    transporter: TransporterType::Net,
+                    ec50: 0.15,
+                    hill_coeff: 1.3,
+                    emax: 0.70,
                 },
             ],
             half_life: 36_000.0, // ~10 hours
@@ -200,32 +202,24 @@ impl DrugProfile {
         }
     }
 
-    /// Methylphenidate (Ritalin) — stimulant. DA/NE reuptake inhibitor.
+    /// Methylphenidate (Ritalin) — stimulant. Pure DAT/NET reuptake inhibitor.
     #[must_use]
     pub fn stimulant_methylphenidate() -> Self {
         Self {
             name: "methylphenidate".into(),
-            bindings: vec![
-                ReceptorBinding {
-                    receptor: ReceptorSubtype::D1,
+            bindings: Vec::new(),
+            transporter_bindings: vec![
+                TransporterBinding {
+                    transporter: TransporterType::Dat,
                     ec50: 0.15,
                     hill_coeff: 1.3,
                     emax: 0.75,
-                    mechanism: DrugMechanism::ReuptakeInhibitor,
                 },
-                ReceptorBinding {
-                    receptor: ReceptorSubtype::D2,
-                    ec50: 0.18,
-                    hill_coeff: 1.3,
-                    emax: 0.65,
-                    mechanism: DrugMechanism::ReuptakeInhibitor,
-                },
-                ReceptorBinding {
-                    receptor: ReceptorSubtype::Alpha1,
-                    ec50: 0.25,
+                TransporterBinding {
+                    transporter: TransporterType::Net,
+                    ec50: 0.20,
                     hill_coeff: 1.2,
                     emax: 0.50,
-                    mechanism: DrugMechanism::ReuptakeInhibitor,
                 },
             ],
             half_life: 10_800.0, // ~3 hours
@@ -295,6 +289,18 @@ impl ActiveDrug {
     #[inline]
     #[must_use]
     pub fn occupancy_at(&self, binding: &ReceptorBinding) -> f32 {
+        hill_equation(
+            self.plasma_concentration,
+            binding.ec50,
+            binding.hill_coeff,
+            binding.emax,
+        )
+    }
+
+    /// Compute occupancy at a specific transporter binding.
+    #[inline]
+    #[must_use]
+    pub fn occupancy_at_transporter(&self, binding: &TransporterBinding) -> f32 {
         hill_equation(
             self.plasma_concentration,
             binding.ec50,
@@ -443,18 +449,13 @@ impl PharmacologyState {
         let mut gaba_pam = 1.0_f32;
 
         for drug in &self.active_drugs {
+            // Process receptor bindings (agonist, antagonist, PAM)
             for binding in &drug.profile.bindings {
                 let occ = drug.occupancy_at(binding);
                 let receptor_avail = self.receptors.get(binding.receptor).availability;
                 let effective = (occ * receptor_avail).clamp(0.0, 1.0);
 
                 match binding.mechanism {
-                    DrugMechanism::ReuptakeInhibitor => {
-                        let transmitter = receptor_to_transmitter(binding.receptor);
-                        let rate = get_clearance_rate_mut(nt, transmitter);
-                        // Reduce clearance (block reuptake), minimum 30% of original
-                        *rate *= (1.0 - effective * 0.7).max(0.3);
-                    }
                     DrugMechanism::Agonist => {
                         let transmitter = receptor_to_transmitter(binding.receptor);
                         let baseline = get_baseline_mut(nt, transmitter);
@@ -466,10 +467,24 @@ impl PharmacologyState {
                         *baseline = (*baseline - effective * 0.3).max(0.0);
                     }
                     DrugMechanism::PositiveAllostericModulator => {
-                        // PAM: amplify GABA effect (doesn't modify TransmitterState directly)
-                        gaba_pam += effective * 1.5; // up to ~2.5× amplification
+                        gaba_pam += effective * 1.5;
+                    }
+                    DrugMechanism::ReuptakeInhibitor => {
+                        // Legacy: receptor-based reuptake inhibition (prefer transporter_bindings)
+                        let transmitter = receptor_to_transmitter(binding.receptor);
+                        let rate = get_clearance_rate_mut(nt, transmitter);
+                        *rate *= (1.0 - effective * 0.7).max(0.3);
                     }
                 }
+            }
+
+            // Process transporter bindings (reuptake inhibition — pharmacologically correct)
+            for binding in &drug.profile.transporter_bindings {
+                let occ = drug.occupancy_at_transporter(binding);
+                let transmitter = transporter_to_transmitter(binding.transporter);
+                let rate = get_clearance_rate_mut(nt, transmitter);
+                // Block reuptake: reduce clearance rate, minimum 30% of original
+                *rate *= (1.0 - occ * 0.7).max(0.3);
             }
         }
 
@@ -497,6 +512,14 @@ fn receptor_to_transmitter(subtype: ReceptorSubtype) -> TransmitterTarget {
             TransmitterTarget::Norepinephrine
         }
         ReceptorSubtype::GabaA | ReceptorSubtype::GabaB => TransmitterTarget::Gaba,
+    }
+}
+
+fn transporter_to_transmitter(transporter: TransporterType) -> TransmitterTarget {
+    match transporter {
+        TransporterType::Sert => TransmitterTarget::Serotonin,
+        TransporterType::Dat => TransmitterTarget::Dopamine,
+        TransporterType::Net => TransmitterTarget::Norepinephrine,
     }
 }
 
@@ -600,7 +623,11 @@ mod tests {
         ];
         for drug in &drugs {
             assert!(!drug.name.is_empty());
-            assert!(!drug.bindings.is_empty());
+            assert!(
+                !drug.bindings.is_empty() || !drug.transporter_bindings.is_empty(),
+                "{} has no bindings",
+                drug.name
+            );
             assert!(drug.half_life > 0.0);
             assert!(drug.onset_delay > 0.0);
         }
@@ -683,12 +710,12 @@ mod tests {
         pharm.administer(
             DrugProfile {
                 name: "test_ssri".into(),
-                bindings: vec![ReceptorBinding {
-                    receptor: ReceptorSubtype::Ht1a,
+                bindings: Vec::new(),
+                transporter_bindings: vec![TransporterBinding {
+                    transporter: TransporterType::Sert,
                     ec50: 0.1,
                     hill_coeff: 1.0,
                     emax: 0.9,
-                    mechanism: DrugMechanism::ReuptakeInhibitor,
                 }],
                 half_life: 100.0, // very short
                 onset_delay: 10.0,

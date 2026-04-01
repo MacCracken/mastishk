@@ -73,21 +73,36 @@
 - [x] `meditation_regulation_boost` — regulation effectiveness (1.0–2.0×)
 - [x] `brain_mood_modifiers` → `BrainMoodEffect` composite struct with all outputs + growth_plasticity
 
-## Future (demand-gated)
+### 0.6.0 — Domain Accuracy (high-priority gaps from external review)
 
-- Spiking neural network models (Izhikevich, LIF)
-- Long-term potentiation / depression (LTP/LTD)
-- Neuroinflammation and microglial activation
-- Gut-brain axis (enteric nervous system, vagus nerve)
-- Neurogenesis (adult hippocampal neurogenesis modeling)
-- EEG signal generation (alpha, beta, theta, delta, gamma bands)
+- [ ] Histamine transmitter — primary wakefulness signal, sleep-wake flip-flop (Saper 2005)
+- [ ] Endocannabinoid system (anandamide/2-AG, CB1 receptor) — stress buffer, HPA recovery
+- [ ] VTA/Nucleus Accumbens reward circuit — incentive salience/wanting distinct from Go/NoGo
+- [ ] Cortisol asymmetric waveform — sharp CAR rise + slow exponential decay (replace symmetric cosine)
+- [ ] Transporter targets (SERT, DAT, NET) — distinct pharmacology targets for reuptake inhibitors
+- [ ] Mu-opioid + NMDA receptor subtypes — pain/endorphin system + glutamate learning
+- [ ] Automated sleep stage transitions — 90-min ultradian cycle, NREM-dominant early / REM-dominant late
+- [ ] Stress sensitization / kindling — allostatic load feeds back to lower HPA activation threshold
+- [ ] Sex hormone modulation — estradiol→serotonin synthesis, testosterone→amygdala/PFC reactivity
+
+### 0.7.0 — Advanced Neural Dynamics
+
+- [ ] Spiking neural network models (Izhikevich, LIF) — fine-grained temporal dynamics
+- [ ] Long-term potentiation / depression (LTP/LTD) — synaptic plasticity beyond Hebbian
+- [ ] Neuroinflammation and microglial activation — sickness behavior, cytokine-brain coupling
+- [ ] Gut-brain axis (enteric nervous system, vagus nerve) — interoception, serotonin gut production
+- [ ] Autonomic nervous system — sympathetic/parasympathetic balance, HRV proxy
+- [ ] Interoceptive inference — predictive processing of body state (Seth 2013)
+- [ ] Seasonal/photoperiod effects — light-driven tryptophan hydroxylase → serotonin seasonal patterns
+- [ ] Age-related parameter curves — PFC maturation (~25), dopaminergic decline (~45)
+- [ ] EEG signal generation (alpha, beta, theta, delta, gamma bands) — observable correlates
 
 ## v1.0 Criteria
 
-- [ ] All 6 modules have cross-module integration tests
+- [ ] All modules have cross-module integration tests
 - [ ] All modules have 80%+ test coverage
 - [ ] Criterion benchmarks with 3-point trend history
 - [ ] Full serde roundtrip tests for all public types
 - [ ] bhava consuming mastishk for emotion grounding
 - [ ] Documentation: architecture overview, usage guide, API docs
-- [ ] Published on crates.io
+- [ ] External domain review: parameter validation against literature, world-class accuracy

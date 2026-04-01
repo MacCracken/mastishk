@@ -59,24 +59,22 @@ impl HpaState {
             allostatic_load = self.allostatic_load,
             "ticking HPA axis"
         );
-        // CRH → ACTH (exponential approach to driven target)
-        // ODE: d(acth)/dt = crh * 0.5 - acth * 0.3
-        // Target: crh * 0.5 / 0.3, rate: 0.3
-        let acth_target = (self.crh * 0.5 / 0.3).min(1.0);
-        let acth_alpha = 1.0 - (-0.3 * dt).exp();
+        // CRH → ACTH (exponential approach, tau ≈ 300s / ~5 min)
+        let acth_rate = 1.0 / 300.0;
+        let acth_target = (self.crh * 1.67).min(1.0); // CRH drives ACTH target
+        let acth_alpha = 1.0 - (-acth_rate * dt).exp();
         self.acth += (acth_target - self.acth) * acth_alpha;
         self.acth = self.acth.clamp(0.0, 1.0);
 
-        // ACTH → cortisol (exponential approach)
-        // ODE: d(cortisol)/dt = acth * 0.4 - (cortisol - baseline) * 0.2
-        // Target: baseline + acth * 0.4 / 0.2, rate: 0.2
-        let cort_target = (self.cortisol_baseline + self.acth * 0.4 / 0.2).min(1.0);
-        let cort_alpha = 1.0 - (-0.2 * dt).exp();
+        // ACTH → cortisol (exponential approach, tau ≈ 600s / ~10 min)
+        let cort_rate = 1.0 / 600.0;
+        let cort_target = (self.cortisol_baseline + self.acth * 0.8).min(1.0);
+        let cort_alpha = 1.0 - (-cort_rate * dt).exp();
         self.cortisol += (cort_target - self.cortisol) * cort_alpha;
         self.cortisol = self.cortisol.clamp(0.0, 1.0);
 
-        // Negative feedback: cortisol suppresses CRH (exponential decay)
-        let fb_rate = self.cortisol * self.feedback_gain * 0.1;
+        // Negative feedback: cortisol suppresses CRH (tau ≈ 900s / ~15 min)
+        let fb_rate = self.cortisol * self.feedback_gain * (1.0 / 900.0);
         self.crh *= (-fb_rate * dt).exp();
         self.crh = self.crh.clamp(0.0, 1.0);
 
@@ -115,9 +113,9 @@ mod tests {
         let mut h = HpaState::default();
         h.stress(0.8);
         assert!(h.crh > 0.2);
-        // Tick to propagate cascade
-        for _ in 0..10 {
-            h.tick(0.5).unwrap();
+        // Tick 20 minutes (cascade needs ~15 min to propagate)
+        for _ in 0..1200 {
+            h.tick(1.0).unwrap();
         }
         assert!(h.cortisol > h.cortisol_baseline);
     }
@@ -126,8 +124,9 @@ mod tests {
     fn test_negative_feedback() {
         let mut h = HpaState::default();
         h.stress(1.0);
-        for _ in 0..50 {
-            h.tick(0.5).unwrap();
+        // 30 minutes for feedback to take effect
+        for _ in 0..1800 {
+            h.tick(1.0).unwrap();
         }
         // CRH should be suppressed by cortisol feedback
         assert!(h.crh < 0.5);
@@ -136,7 +135,8 @@ mod tests {
     #[test]
     fn test_allostatic_load() {
         let mut h = HpaState::default();
-        for _ in 0..100 {
+        // Repeated stress over 1 hour
+        for _ in 0..3600 {
             h.stress(0.5);
             h.tick(1.0).unwrap();
         }
@@ -162,8 +162,9 @@ mod tests {
         let mut h = HpaState::default();
         assert!(!h.is_stressed());
         h.stress(1.0);
-        for _ in 0..20 {
-            h.tick(0.5).unwrap();
+        // 20 minutes for cortisol to rise
+        for _ in 0..1200 {
+            h.tick(1.0).unwrap();
         }
         assert!(h.is_stressed());
     }
@@ -172,7 +173,8 @@ mod tests {
     fn test_is_chronic() {
         let mut h = HpaState::default();
         assert!(!h.is_chronic());
-        for _ in 0..500 {
+        // Sustained stress for 2 hours
+        for _ in 0..7200 {
             h.stress(0.8);
             h.tick(1.0).unwrap();
         }
@@ -182,16 +184,22 @@ mod tests {
     #[test]
     fn test_allostatic_load_recovers() {
         let mut h = HpaState::default();
-        // Build up load
-        for _ in 0..100 {
-            h.stress(0.5);
-            h.tick(1.0).unwrap();
+        // Build up load: stress every minute for 1 hour
+        for _ in 0..60 {
+            h.stress(0.8);
+            h.tick(60.0).unwrap();
         }
         let peak_load = h.allostatic_load;
-        // Let it recover (no stress)
-        for _ in 0..1000 {
-            h.tick(1.0).unwrap();
+        assert!(peak_load > 0.0, "load should accumulate");
+        // Let it recover: 12 hours no stress (in 1-minute steps)
+        for _ in 0..720 {
+            h.tick(60.0).unwrap();
         }
-        assert!(h.allostatic_load < peak_load);
+        assert!(
+            h.allostatic_load < peak_load,
+            "load={}, peak={}",
+            h.allostatic_load,
+            peak_load
+        );
     }
 }

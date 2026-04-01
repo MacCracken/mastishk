@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (Domain Accuracy — external review)
+- **pharmacology** — SSRIs now correctly target SERT transporter (not 5-HT1A/2A receptors). Added `TransporterType` enum (Sert, Dat, Net), `TransporterBinding` struct, and `transporter_bindings` field on `DrugProfile`. Methylphenidate similarly moved to DAT/NET transporters. Amphetamine retains D1/D2 agonist bindings (vesicular release) plus DAT/NET transporter bindings
+- **coupling** — Added bidirectional amygdala↔PFC coupling: high amygdala activation now impairs PFC executive control and working memory (Arnsten 2009 stress-cognition trade-off). Previously only PFC→amygdala inhibition existed
+- **sleep** — Replaced linear adenosine dynamics with Borbely two-process model: exponential rise during wake (tau_w=18.2h) and exponential decay during sleep (tau_s=4.2h). Agents now properly recover from sleep (0.8→0.12 after 8hr sleep vs old 0.8→0.32)
+- **neurotransmitter** — Added `dopamine_phasic` field (−1.0 to +1.0) for transient reward prediction error signals distinct from tonic dopamine level. `fire_dopamine_burst()` method. Phasic decays with ~500ms half-life. Tonic DA drives Go/NoGo motivation, phasic DA drives habit learning rate in basal ganglia coupling
+- **hpa** — Slowed HPA cascade timing ~100x to match biological reality: CRH→ACTH tau≈300s (~5 min), ACTH→cortisol tau≈600s (~10 min), feedback tau≈900s (~15 min). Previously produced equilibrium in seconds
+
 ## [0.4.0] - 2026-03-31
 
 ### Added

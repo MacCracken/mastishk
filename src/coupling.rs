@@ -332,12 +332,14 @@ pub fn composite_stress(hpa: &HpaState, dmn: &DmnState, sleep: &SleepState) -> f
 ///
 /// Dopamine follows inverted-U on working memory (optimal at 0.5), serotonin
 /// supports impulse control, cortisol and sleep debt impair executive function.
+/// High amygdala activation disrupts PFC (Arnsten 2009 — stress impairs PFC).
 #[inline]
 pub fn apply_nt_pfc_coupling(
     profile: &NeurotransmitterProfile,
     pfc: &mut PfcState,
     hpa: &HpaState,
     sleep: &SleepState,
+    amygdala: &AmygdalaState,
     dt: f32,
 ) -> Result<(), MastishkError> {
     validate_dt(dt)?;
@@ -361,7 +363,16 @@ pub fn apply_nt_pfc_coupling(
     let debt_penalty = (sleep.sleep_debt / 24.0).min(1.0) * 0.1;
     pfc.fatigue = (pfc.fatigue + debt_penalty * alpha).clamp(0.0, 1.0);
 
-    tracing::trace!(da_effect, "NT-PFC coupling applied");
+    // Amygdala→PFC: high amygdala activation disrupts executive function
+    // (Arnsten 2009 — stress signaling impairs PFC structure and function)
+    let amygdala_impairment = (amygdala.activation - 0.3).max(0.0) * 0.2;
+    pfc.executive_control = (pfc.executive_control - amygdala_impairment * alpha).clamp(0.0, 1.0);
+    // High threat also degrades working memory capacity
+    let threat_wm_penalty = amygdala.threat_response() * 0.15;
+    pfc.working_memory_capacity =
+        (pfc.working_memory_capacity - threat_wm_penalty * alpha).clamp(0.3, 1.0);
+
+    tracing::trace!(da_effect, amygdala_impairment, "NT-PFC coupling applied");
     Ok(())
 }
 
@@ -463,8 +474,9 @@ pub fn apply_amygdala_hpa_coupling(
 
 /// Apply dopamine and PFC/hippocampus modulation to basal ganglia.
 ///
-/// Dopamine D1 enhances Go, D2 enhances No-Go. PFC goal maintenance biases
-/// goal-directed over habitual. Hippocampus context modulates prediction.
+/// Tonic dopamine (sustained level) modulates Go/NoGo balance: D1 enhances Go,
+/// D2 enhances No-Go. Phasic dopamine bursts modulate learning rate for habit
+/// formation. PFC goal maintenance biases goal-directed over habitual.
 #[inline]
 pub fn apply_nt_basal_ganglia_coupling(
     profile: &NeurotransmitterProfile,
@@ -476,15 +488,19 @@ pub fn apply_nt_basal_ganglia_coupling(
 ) -> Result<(), MastishkError> {
     validate_dt(dt)?;
     let alpha = 1.0 - (-0.1 * dt).exp();
-    let da = profile.dopamine.level;
 
-    // D1 → Go pathway (higher DA = more Go)
-    let go_boost = da * params.dopamine_bg_gain;
+    // Tonic DA → Go/No-Go balance (sustained motivation/effort)
+    let tonic_da = profile.dopamine.level;
+    let go_boost = tonic_da * params.dopamine_bg_gain;
     bg.go_signal = (bg.go_signal + go_boost * alpha).min(1.0);
-
-    // D2 → No-Go pathway (inverse: low DA = more No-Go)
-    let nogo_boost = (1.0 - da) * params.dopamine_bg_gain * 0.5;
+    let nogo_boost = (1.0 - tonic_da) * params.dopamine_bg_gain * 0.5;
     bg.nogo_signal = (bg.nogo_signal + nogo_boost * alpha).min(1.0);
+
+    // Phasic DA → learning rate modulation (RPE-driven habit updates)
+    // Positive phasic bursts accelerate habit strengthening
+    if profile.dopamine_phasic > 0.0 {
+        bg.habit_strength = (bg.habit_strength + profile.dopamine_phasic * 0.01 * dt).min(1.0);
+    }
 
     // PFC goal maintenance biases toward goal-directed (suppresses habit)
     let goal_bias = pfc.goal_maintenance * 0.1;

@@ -9,6 +9,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{MastishkError, validate_dt};
 
+/// Neurotransmitter reuptake transporter identifiers.
+///
+/// Transporters are the primary target of reuptake inhibitor drugs (SSRIs, SNRIs,
+/// stimulants). Distinct from receptors — blocking a transporter increases synaptic
+/// concentration of the corresponding neurotransmitter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum TransporterType {
+    /// Serotonin transporter — target of SSRIs (fluoxetine, sertraline).
+    Sert,
+    /// Dopamine transporter — target of stimulants (methylphenidate), cocaine.
+    Dat,
+    /// Norepinephrine transporter — target of SNRIs, stimulants (amphetamine).
+    Net,
+}
+
 /// Receptor subtype identifiers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[non_exhaustive]

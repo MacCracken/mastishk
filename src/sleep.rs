@@ -91,7 +91,12 @@ impl SleepState {
         }
     }
 
-    /// Tick adenosine: rises during wake, falls during sleep.
+    /// Tick adenosine (Process S) using Borbely two-process model.
+    ///
+    /// During wakefulness: exponential rise toward 1.0 with tau_w = 18.2 hours.
+    /// During sleep: exponential decay toward 0.0 with tau_s = 4.2 hours.
+    /// These time constants produce realistic sleep pressure dynamics:
+    /// ~0.8 after 16hr wake, ~0.12 after 8hr sleep.
     ///
     /// # Errors
     /// Returns [`MastishkError::NegativeTimeDelta`] if `dt_hours < 0.0`.
@@ -100,15 +105,17 @@ impl SleepState {
         validate_dt(dt_hours)?;
         tracing::trace!(dt_hours, stage = ?self.stage, adenosine = self.adenosine, "ticking adenosine");
         if self.stage == SleepStage::Wake {
-            // Adenosine rises ~0.04/hr during wakefulness
-            self.adenosine = (self.adenosine + 0.04 * dt_hours).min(1.0);
+            // Process S rise: exponential approach to 1.0, tau_w = 18.2 hours
+            let alpha_w = 1.0 - (-dt_hours / 18.2).exp();
+            self.adenosine += (1.0 - self.adenosine) * alpha_w;
             self.sleep_debt += dt_hours.max(0.0) * 0.125; // ~1hr debt per 8hr awake
         } else {
-            // Adenosine clears during sleep
-            self.adenosine = (self.adenosine - 0.06 * dt_hours).max(0.0);
+            // Process S decay: exponential toward 0.0, tau_s = 4.2 hours
+            self.adenosine *= (-dt_hours / 4.2).exp();
             self.sleep_debt = (self.sleep_debt - dt_hours * 0.25).max(0.0);
             self.total_sleep += dt_hours;
         }
+        self.adenosine = self.adenosine.clamp(0.0, 1.0);
         Ok(())
     }
 }
