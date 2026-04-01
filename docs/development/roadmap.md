@@ -1,6 +1,6 @@
 # Development Roadmap
 
-> **Status**: Pre-1.0 | **Current**: 0.1.0
+> **Status**: Pre-1.0 | **Current**: 0.2.0
 
 ## Completed
 
@@ -16,15 +16,18 @@
 - [x] Optional structured logging
 - [x] Initial criterion benchmarks
 
+### 0.2.0 — Cross-Module Integration (2026-03-31)
+
+- [x] Sleep-neurotransmitter coupling (ACh peaks in REM, serotonin/NE suppressed per stage)
+- [x] Circadian-HPA coupling (cortisol CAR feeds HPA baseline via exponential tracking)
+- [x] DMN-HPA coupling (rumination as chronic stressor, feedback gain impairment)
+- [x] Arousal-circuit modulation (NE/glutamate multiplicative gain via GANE model)
+- [x] Integrated BrainState snapshot combining all modules with orchestrated tick
+- [x] CouplingParams / CircuitGainParams for consumer-tunable coupling
+- [x] Composite arousal and stress metrics
+- [x] Circuit::tick_with_gain for neuromodulatory synaptic scaling
+
 ## Backlog
-
-### 0.2.0 — Cross-Module Integration
-
-- [ ] Sleep-neurotransmitter coupling (ACh peaks in REM, serotonin suppressed)
-- [ ] Circadian-HPA coupling (cortisol CAR feeds HPA baseline)
-- [ ] DMN-HPA coupling (rumination drives chronic stress)
-- [ ] Arousal-circuit modulation (NE/glutamate modulate firing rates)
-- [ ] Integrated brain state snapshot combining all modules
 
 ### 0.3.0 — Receptor Pharmacology
 

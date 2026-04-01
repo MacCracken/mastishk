@@ -147,6 +147,35 @@ impl Circuit {
         }
         Ok(())
     }
+
+    /// Tick with a global neuromodulatory gain applied to all synaptic weights.
+    ///
+    /// `gain` multiplicatively scales all synaptic inputs for this tick only.
+    /// The stored weights are not modified. Equivalent to `tick` when `gain == 1.0`.
+    ///
+    /// # Errors
+    /// Returns [`MastishkError::NegativeTimeDelta`] if `dt < 0.0`.
+    #[inline]
+    pub fn tick_with_gain(&mut self, gain: f32, dt: f32) -> Result<(), MastishkError> {
+        validate_dt(dt)?;
+        tracing::trace!(
+            dt,
+            gain,
+            populations = self.populations.len(),
+            synapses = self.synapses.len(),
+            "ticking circuit with gain"
+        );
+        let mut inputs = vec![0.0_f32; self.populations.len()];
+        for syn in &self.synapses {
+            if syn.from < self.populations.len() && syn.to < self.populations.len() {
+                inputs[syn.to] += self.populations[syn.from].rate * syn.weight * gain;
+            }
+        }
+        for (i, pop) in self.populations.iter_mut().enumerate() {
+            pop.tick_unchecked(inputs[i], dt);
+        }
+        Ok(())
+    }
 }
 
 impl Default for Circuit {
@@ -224,5 +253,43 @@ mod tests {
         c.add_population(NeuralPopulation::new("A", 0.5, 0.1, true));
         assert!(c.add_synapse(0, 99, 0.5).is_err()); // invalid target
         assert!(c.add_synapse(99, 0, 0.5).is_err()); // invalid source
+    }
+
+    #[test]
+    fn test_tick_with_gain_amplifies() {
+        // Build identical circuits, tick one with gain > 1
+        let mut c1 = Circuit::new();
+        let a1 = c1.add_population(NeuralPopulation::new("A", 0.5, 0.1, true));
+        let b1 = c1.add_population(NeuralPopulation::new("B", 0.1, 0.1, true));
+        c1.add_synapse(a1, b1, 0.5).unwrap();
+
+        let mut c2 = c1.clone();
+
+        c1.tick(0.5).unwrap();
+        c2.tick_with_gain(2.0, 0.5).unwrap();
+
+        // Higher gain should produce higher rate on B
+        assert!(c2.populations[b1].rate > c1.populations[b1].rate);
+    }
+
+    #[test]
+    fn test_tick_with_gain_one_equals_tick() {
+        let mut c1 = Circuit::new();
+        let a = c1.add_population(NeuralPopulation::new("A", 0.5, 0.1, true));
+        let b = c1.add_population(NeuralPopulation::new("B", 0.1, 0.1, true));
+        c1.add_synapse(a, b, 0.5).unwrap();
+
+        let mut c2 = c1.clone();
+
+        c1.tick(0.5).unwrap();
+        c2.tick_with_gain(1.0, 0.5).unwrap();
+
+        assert!((c1.populations[b].rate - c2.populations[b].rate).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_tick_with_gain_negative_dt_rejected() {
+        let mut c = Circuit::new();
+        assert!(c.tick_with_gain(1.0, -1.0).is_err());
     }
 }

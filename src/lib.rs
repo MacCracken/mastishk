@@ -7,7 +7,7 @@
 //!
 //! # Architecture
 //!
-//! Six domain modules:
+//! Six domain modules plus integration:
 //!
 //! - [`neurotransmitter`] — Monoamine dynamics (serotonin, dopamine, norepinephrine),
 //!   GABA/glutamate balance, neuropeptides (oxytocin, endorphins), acetylcholine,
@@ -22,6 +22,10 @@
 //!   meditation suppression, task-positive network switching.
 //! - [`chronobiology`] — Melatonin synthesis from light input, cortisol circadian
 //!   rhythm (CAR), core body temperature oscillation, SCN pacemaker model.
+//! - [`coupling`] — Cross-module coupling functions: sleep→neurotransmitter,
+//!   circadian→HPA, DMN→HPA, arousal→circuit. Composite metrics.
+//! - [`brain`] — Unified [`brain::BrainState`] orchestrating all subsystems
+//!   with a single `tick(dt)`.
 //!
 //! # Relationship to Other Crates
 //!
@@ -35,8 +39,10 @@
 //! rasayan — biochemistry (enzyme kinetics, metabolic pathways)
 //! ```
 
+pub mod brain;
 pub mod chronobiology;
 pub mod circuit;
+pub mod coupling;
 pub mod dmn;
 pub mod error;
 pub mod hpa;

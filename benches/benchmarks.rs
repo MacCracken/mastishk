@@ -1,6 +1,8 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
+use mastishk::brain::BrainState;
 use mastishk::circuit::{Circuit, NeuralPopulation};
+use mastishk::coupling::{composite_arousal, composite_stress};
 use mastishk::hpa::HpaState;
 use mastishk::neurotransmitter::NeurotransmitterProfile;
 
@@ -52,10 +54,56 @@ fn bench_hpa_tick(c: &mut Criterion) {
     });
 }
 
+fn bench_brain_state_tick(c: &mut Criterion) {
+    let mut brain = BrainState::default();
+    let a = brain
+        .circuit
+        .add_population(NeuralPopulation::new("excitatory", 0.5, 0.1, true));
+    let b = brain
+        .circuit
+        .add_population(NeuralPopulation::new("inhibitory", 0.2, 0.2, false));
+    brain.circuit.add_synapse(a, b, 0.5).unwrap();
+    brain.circuit.add_synapse(b, a, -0.3).unwrap();
+
+    c.bench_function("brain_state_tick", |bench| {
+        bench.iter(|| {
+            let mut b = brain.clone();
+            b.tick(black_box(0.016)).unwrap();
+            b
+        })
+    });
+}
+
+fn bench_composite_metrics(c: &mut Criterion) {
+    let brain = BrainState::default();
+
+    c.bench_function("composite_arousal", |bench| {
+        bench.iter(|| {
+            composite_arousal(
+                black_box(&brain.neurotransmitter),
+                black_box(&brain.circadian),
+                black_box(&brain.sleep),
+            )
+        })
+    });
+
+    c.bench_function("composite_stress", |bench| {
+        bench.iter(|| {
+            composite_stress(
+                black_box(&brain.hpa),
+                black_box(&brain.dmn),
+                black_box(&brain.sleep),
+            )
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_neurotransmitter_tick,
     bench_circuit_tick,
-    bench_hpa_tick
+    bench_hpa_tick,
+    bench_brain_state_tick,
+    bench_composite_metrics
 );
 criterion_main!(benches);

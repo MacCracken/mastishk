@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-31
+
+### Added
+- **coupling** — New cross-module coupling functions: sleep→neurotransmitter (ACh peaks in REM, serotonin/NE suppressed), circadian→HPA (cortisol awakening response sets HPA baseline), DMN→HPA (rumination as chronic stressor with feedback gain impairment), arousal→circuit (NE/glutamate multiplicative gain via GANE model)
+- **brain** — New `BrainState` struct orchestrating all 6 subsystems with a single `tick(dt)` applying couplings in correct causal order. Composite `arousal()` and `stress()` metrics
+- **coupling** — `CouplingParams` and `CircuitGainParams` for consumer-tunable coupling strengths
+- **coupling** — `composite_arousal()` and `composite_stress()` combining multi-module state
+- **circuit** — `Circuit::tick_with_gain(gain, dt)` for neuromodulatory synaptic scaling without permanent weight mutation
+- **all modules** — `#[inline]` on all hot-path `tick`, getter, and computed property functions
+- **all modules** — `tracing` instrumentation on all public state-mutating operations (`debug!` for discrete events, `trace!` for per-tick updates)
+- **all modules** — Comprehensive test coverage: negative dt rejection, boundary conditions, untested getters, edge cases, cross-module integration tests (24hr cycle, sleep deprivation, stress-rumination feedback). Test count: 42 → 105
+
 ### Changed
 - **all modules** — All `tick` methods now return `Result<(), MastishkError>`, rejecting negative time deltas with `NegativeTimeDelta` error
 - **circuit** — `add_synapse` now returns `Result`, validating population indices at creation time
@@ -16,11 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **sleep** — Fixed `total_sleep` units: was incorrectly multiplying hours by 3600 (mixing seconds/hours); now consistently uses hours
 - **docs** — Removed claims of Hebbian learning and lateral inhibition from circuit module (not yet implemented)
-
-### Added
-- **all modules** — `#[inline]` on all hot-path `tick`, getter, and computed property functions
-- **all modules** — `tracing` instrumentation on all public state-mutating operations (`debug!` for discrete events, `trace!` for per-tick updates)
-- **all modules** — Comprehensive test coverage: negative dt rejection, boundary conditions, untested getters (`alertness`, `consolidation_rate`, `is_stressed`, `is_chronic`, `self_referential`, `reward_sensitivity`, `plasticity_rate`), edge cases. Test count: 42 → 68
 
 ## [0.1.0] - 2026-03-31
 

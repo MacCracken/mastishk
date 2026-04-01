@@ -1,5 +1,6 @@
 //! Integration tests for mastishk — cross-module behavior and serde roundtrips.
 
+use mastishk::brain::BrainState;
 use mastishk::chronobiology::CircadianState;
 use mastishk::circuit::{Circuit, NeuralPopulation};
 use mastishk::dmn::DmnState;
@@ -153,4 +154,74 @@ fn test_hpa_stress_cascade_propagates() {
         hpa.tick(0.5).unwrap();
     }
     assert!(hpa.cortisol > initial_cortisol);
+}
+
+// ── BrainState integration ─────────────────────────────────────────
+
+#[test]
+fn test_brain_state_serde_roundtrip() {
+    let mut brain = BrainState::default();
+    brain.tick(1.0).unwrap();
+    let json = serde_json::to_string(&brain).unwrap();
+    let brain2: BrainState = serde_json::from_str(&json).unwrap();
+    assert!(
+        (brain2.neurotransmitter.serotonin.level - brain.neurotransmitter.serotonin.level).abs()
+            < f32::EPSILON
+    );
+    assert!((brain2.hpa.cortisol - brain.hpa.cortisol).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_sleep_deprivation_cascade() {
+    let mut brain = BrainState::default();
+    // Keep awake for 24 hours (in 1-minute steps)
+    for _ in 0..1440 {
+        brain.tick(60.0).unwrap();
+    }
+    // Adenosine should be high, sleep pressure elevated
+    assert!(brain.sleep.adenosine > 0.8);
+    assert!(brain.sleep.sleep_pressure() > 0.5);
+    // Sleep debt should have accumulated
+    assert!(brain.sleep.sleep_debt > 1.0);
+}
+
+#[test]
+fn test_stress_rumination_feedback() {
+    let mut brain = BrainState::default();
+    // Set high rumination
+    brain.dmn.rumination = 0.8;
+    let initial_cortisol = brain.hpa.cortisol;
+
+    // Tick for a while — rumination should drive cortisol up
+    for _ in 0..200 {
+        brain.tick(1.0).unwrap();
+    }
+    assert!(brain.hpa.cortisol > initial_cortisol);
+    // Allostatic load should accumulate from chronic stress
+    assert!(brain.hpa.allostatic_load > 0.0);
+}
+
+#[test]
+fn test_full_day_subsystem_coherence() {
+    let mut brain = BrainState::default();
+    let a = brain
+        .circuit
+        .add_population(NeuralPopulation::new("exc", 0.5, 0.1, true));
+    let b = brain
+        .circuit
+        .add_population(NeuralPopulation::new("inh", 0.2, 0.2, false));
+    brain.circuit.add_synapse(a, b, 0.5).unwrap();
+    brain.circadian.phase_hours = 6.0; // early morning
+
+    // Simulate 24 hours in 5-minute steps
+    for _ in 0..288 {
+        brain.tick(300.0).unwrap();
+    }
+
+    // All values should remain in valid ranges
+    assert!((0.0..=1.0).contains(&brain.arousal()));
+    assert!((0.0..=1.0).contains(&brain.stress()));
+    assert!((0.0..=1.0).contains(&brain.neurotransmitter.serotonin.level));
+    assert!((0.0..=1.0).contains(&brain.hpa.cortisol));
+    assert!((0.0..=1.0).contains(&brain.circadian.melatonin));
 }
