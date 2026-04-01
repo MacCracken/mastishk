@@ -69,4 +69,7 @@ pub mod spiking;
 #[cfg(feature = "logging")]
 pub mod logging;
 
+#[cfg(feature = "biochemistry")]
+pub mod biochemistry;
+
 pub use error::MastishkError;
