@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **all modules** — All `tick` methods now return `Result<(), MastishkError>`, rejecting negative time deltas with `NegativeTimeDelta` error
+- **circuit** — `add_synapse` now returns `Result`, validating population indices at creation time
+- **hpa** — Replaced Euler integration with exponential decay for stable behavior at large dt values
+- **chronobiology** — `CircadianState::default()` now derives rhythm values from `update_rhythms()` instead of hardcoded approximations
+
+### Fixed
+- **sleep** — Fixed `total_sleep` units: was incorrectly multiplying hours by 3600 (mixing seconds/hours); now consistently uses hours
+- **docs** — Removed claims of Hebbian learning and lateral inhibition from circuit module (not yet implemented)
+
+### Added
+- **all modules** — `#[inline]` on all hot-path `tick`, getter, and computed property functions
+- **all modules** — `tracing` instrumentation on all public state-mutating operations (`debug!` for discrete events, `trace!` for per-tick updates)
+- **all modules** — Comprehensive test coverage: negative dt rejection, boundary conditions, untested getters (`alertness`, `consolidation_rate`, `is_stressed`, `is_chronic`, `self_referential`, `reward_sensitivity`, `plasticity_rate`), edge cases. Test count: 42 → 68
+
 ## [0.1.0] - 2026-03-31
 
 ### Added

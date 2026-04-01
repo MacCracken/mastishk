@@ -11,7 +11,7 @@ Used by [bhava](https://github.com/MacCracken/bhava) (emotion/personality), [bod
 | Module | Description |
 |--------|-------------|
 | `neurotransmitter` | Monoamine dynamics (serotonin, dopamine, norepinephrine), GABA/glutamate balance, neuropeptides (oxytocin, endorphins), acetylcholine, BDNF neuroplasticity. Synthesis, reuptake, degradation kinetics |
-| `circuit` | Neural circuit primitives: excitatory/inhibitory populations, firing rates, synaptic weights, Hebbian learning, lateral inhibition |
+| `circuit` | Neural circuit primitives: excitatory/inhibitory populations, firing rates, synaptic weights, mean-field rate models |
 | `sleep` | Sleep architecture: NREM stages 1-3, REM cycling, adenosine buildup (Process S), sleep debt, ultradian 90-min cycles |
 | `hpa` | Hypothalamic-pituitary-adrenal axis: CRH -> ACTH -> cortisol cascade, negative feedback, chronic stress adaptation, allostatic load |
 | `dmn` | Default mode network: self-referential processing, mind-wandering, meditation suppression, task-positive network switching |

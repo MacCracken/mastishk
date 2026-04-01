@@ -5,6 +5,7 @@
 //! Each neurotransmitter has a normalized level (0.0–1.0) representing relative
 //! concentration, with kinetic parameters for synthesis and clearance.
 
+use crate::error::{MastishkError, validate_dt};
 use serde::{Deserialize, Serialize};
 
 /// A neurotransmitter's current state.
@@ -34,13 +35,28 @@ impl TransmitterState {
 
     /// Apply a stimulus (positive = release, negative = inhibition).
     /// Level is clamped to 0.0..=1.0.
+    #[inline]
     pub fn stimulate(&mut self, delta: f32) {
         self.level = (self.level + delta).clamp(0.0, 1.0);
+        tracing::debug!(delta, level = self.level, "transmitter stimulated");
     }
 
     /// Tick the transmitter toward baseline over `dt` seconds.
     /// Uses exponential decay toward baseline.
-    pub fn tick(&mut self, dt: f32) {
+    ///
+    /// # Errors
+    /// Returns [`MastishkError::NegativeTimeDelta`] if `dt < 0.0`.
+    #[inline]
+    pub fn tick(&mut self, dt: f32) -> Result<(), MastishkError> {
+        validate_dt(dt)?;
+        self.tick_unchecked(dt);
+        Ok(())
+    }
+
+    /// Tick without validating dt. Used by [`NeurotransmitterProfile::tick_all`]
+    /// after a single validation pass.
+    #[inline]
+    pub(crate) fn tick_unchecked(&mut self, dt: f32) {
         let diff = self.baseline - self.level;
         let rate = if diff > 0.0 {
             self.synthesis_rate
@@ -52,6 +68,7 @@ impl TransmitterState {
     }
 
     /// How far above or below baseline (negative = depleted, positive = elevated).
+    #[inline]
     #[must_use]
     pub fn deviation(&self) -> f32 {
         self.level - self.baseline
@@ -99,19 +116,27 @@ impl Default for NeurotransmitterProfile {
 
 impl NeurotransmitterProfile {
     /// Tick all transmitters toward their baselines.
-    pub fn tick_all(&mut self, dt: f32) {
-        self.serotonin.tick(dt);
-        self.dopamine.tick(dt);
-        self.norepinephrine.tick(dt);
-        self.gaba.tick(dt);
-        self.glutamate.tick(dt);
-        self.oxytocin.tick(dt);
-        self.endorphins.tick(dt);
-        self.acetylcholine.tick(dt);
-        self.bdnf.tick(dt);
+    ///
+    /// # Errors
+    /// Returns [`MastishkError::NegativeTimeDelta`] if `dt < 0.0`.
+    #[inline]
+    pub fn tick_all(&mut self, dt: f32) -> Result<(), MastishkError> {
+        validate_dt(dt)?;
+        tracing::trace!(dt, "ticking all neurotransmitters");
+        self.serotonin.tick_unchecked(dt);
+        self.dopamine.tick_unchecked(dt);
+        self.norepinephrine.tick_unchecked(dt);
+        self.gaba.tick_unchecked(dt);
+        self.glutamate.tick_unchecked(dt);
+        self.oxytocin.tick_unchecked(dt);
+        self.endorphins.tick_unchecked(dt);
+        self.acetylcholine.tick_unchecked(dt);
+        self.bdnf.tick_unchecked(dt);
+        Ok(())
     }
 
     /// GABA/glutamate ratio — >1.0 = inhibition dominant, <1.0 = excitation dominant.
+    #[inline]
     #[must_use]
     pub fn inhibition_ratio(&self) -> f32 {
         if self.glutamate.level > 0.0 {
@@ -122,18 +147,21 @@ impl NeurotransmitterProfile {
     }
 
     /// Overall arousal level derived from NE + glutamate - GABA.
+    #[inline]
     #[must_use]
     pub fn arousal(&self) -> f32 {
         ((self.norepinephrine.level + self.glutamate.level - self.gaba.level) / 2.0).clamp(0.0, 1.0)
     }
 
     /// Reward sensitivity derived from dopamine level.
+    #[inline]
     #[must_use]
     pub fn reward_sensitivity(&self) -> f32 {
         self.dopamine.level
     }
 
     /// Neuroplasticity rate derived from BDNF.
+    #[inline]
     #[must_use]
     pub fn plasticity_rate(&self) -> f32 {
         self.bdnf.level
@@ -164,7 +192,7 @@ mod tests {
     fn test_tick_toward_baseline() {
         let mut t = TransmitterState::at_baseline(0.5, 0.1, 0.1);
         t.level = 0.9;
-        t.tick(30.0);
+        t.tick(30.0).unwrap();
         assert!((t.level - t.baseline).abs() < 0.1);
     }
 
@@ -179,7 +207,7 @@ mod tests {
     fn test_tick_all() {
         let mut p = NeurotransmitterProfile::default();
         p.serotonin.stimulate(0.3);
-        p.tick_all(1.0);
+        p.tick_all(1.0).unwrap();
         // Should have moved toward baseline
         assert!(p.serotonin.level < 0.8);
     }
@@ -190,5 +218,61 @@ mod tests {
         let json = serde_json::to_string(&p).unwrap();
         let p2: NeurotransmitterProfile = serde_json::from_str(&json).unwrap();
         assert!((p2.serotonin.level - p.serotonin.level).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_negative_dt_rejected() {
+        let mut t = TransmitterState::at_baseline(0.5, 0.1, 0.1);
+        assert!(t.tick(-1.0).is_err());
+
+        let mut p = NeurotransmitterProfile::default();
+        assert!(p.tick_all(-0.5).is_err());
+    }
+
+    #[test]
+    fn test_zero_dt_is_noop() {
+        let mut t = TransmitterState::at_baseline(0.5, 0.1, 0.1);
+        t.level = 0.8;
+        t.tick(0.0).unwrap();
+        assert!((t.level - 0.8).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_reward_sensitivity() {
+        let mut p = NeurotransmitterProfile::default();
+        let base = p.reward_sensitivity();
+        p.dopamine.stimulate(0.3);
+        assert!(p.reward_sensitivity() > base);
+    }
+
+    #[test]
+    fn test_plasticity_rate() {
+        let mut p = NeurotransmitterProfile::default();
+        let base = p.plasticity_rate();
+        p.bdnf.stimulate(0.2);
+        assert!(p.plasticity_rate() > base);
+    }
+
+    #[test]
+    fn test_inhibition_ratio_zero_glutamate() {
+        let mut p = NeurotransmitterProfile::default();
+        p.glutamate.level = 0.0;
+        assert!(p.inhibition_ratio().is_infinite());
+    }
+
+    #[test]
+    fn test_arousal_boundary_clamp() {
+        let mut p = NeurotransmitterProfile::default();
+        // Max out excitatory, zero inhibitory
+        p.norepinephrine.level = 1.0;
+        p.glutamate.level = 1.0;
+        p.gaba.level = 0.0;
+        assert!(p.arousal() <= 1.0);
+
+        // Zero everything
+        p.norepinephrine.level = 0.0;
+        p.glutamate.level = 0.0;
+        p.gaba.level = 1.0;
+        assert!(p.arousal() >= 0.0);
     }
 }

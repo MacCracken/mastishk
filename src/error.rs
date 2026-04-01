@@ -21,12 +21,19 @@ pub enum MastishkError {
 
     /// Sleep stage transition not valid.
     #[error("invalid sleep transition: {from:?} -> {to:?}")]
-    InvalidSleepTransition {
-        from: String,
-        to: String,
-    },
+    InvalidSleepTransition { from: String, to: String },
 
     /// Negative time delta.
     #[error("negative time delta: {0}")]
     NegativeTimeDelta(f32),
+}
+
+/// Validate that a time delta is non-negative.
+#[inline]
+pub(crate) fn validate_dt(dt: f32) -> Result<(), MastishkError> {
+    if dt < 0.0 {
+        Err(MastishkError::NegativeTimeDelta(dt))
+    } else {
+        Ok(())
+    }
 }

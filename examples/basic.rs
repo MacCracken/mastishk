@@ -29,13 +29,16 @@ fn main() {
     println!("=== Stress Response ===");
     profile.norepinephrine.stimulate(0.3);
     profile.glutamate.stimulate(0.2);
-    println!("Norepinephrine: {:.3} (elevated)", profile.norepinephrine.level);
+    println!(
+        "Norepinephrine: {:.3} (elevated)",
+        profile.norepinephrine.level
+    );
     println!("Arousal:        {:.3} (elevated)", profile.arousal());
     println!();
 
     // Tick forward 5 seconds — watch transmitters decay toward baseline
     println!("=== After 5 seconds (decay toward baseline) ===");
-    profile.tick_all(5.0);
+    profile.tick_all(5.0).unwrap();
     println!("Dopamine:       {:.3}", profile.dopamine.level);
     println!("Norepinephrine: {:.3}", profile.norepinephrine.level);
     println!("Arousal:        {:.3}", profile.arousal());

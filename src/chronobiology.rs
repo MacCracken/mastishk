@@ -5,6 +5,7 @@
 //! synthesis (dark-phase), cortisol awakening response (CAR), and core
 //! body temperature oscillation.
 
+use crate::error::{MastishkError, validate_dt};
 use serde::{Deserialize, Serialize};
 
 /// Circadian phase state driven by the SCN pacemaker.
@@ -24,26 +25,41 @@ pub struct CircadianState {
 
 impl Default for CircadianState {
     fn default() -> Self {
-        Self {
+        let mut state = Self {
             phase_hours: 8.0, // morning
-            melatonin: 0.05,
-            cortisol_circadian: 0.6,
-            temperature_deviation: 0.2,
+            melatonin: 0.0,
+            cortisol_circadian: 0.0,
+            temperature_deviation: 0.0,
             light_exposure: 500.0,
-        }
+        };
+        state.update_rhythms();
+        state
     }
 }
 
 impl CircadianState {
     /// Advance the circadian clock by `dt` hours.
-    pub fn tick(&mut self, dt_hours: f32) {
+    ///
+    /// # Errors
+    /// Returns [`MastishkError::NegativeTimeDelta`] if `dt_hours < 0.0`.
+    #[inline]
+    pub fn tick(&mut self, dt_hours: f32) -> Result<(), MastishkError> {
+        validate_dt(dt_hours)?;
+        tracing::trace!(
+            dt_hours,
+            phase = self.phase_hours,
+            "ticking circadian clock"
+        );
         self.phase_hours = (self.phase_hours + dt_hours) % 24.0;
         self.update_rhythms();
+        Ok(())
     }
 
     /// Set current light exposure (lux).
+    #[inline]
     pub fn set_light(&mut self, lux: f32) {
         self.light_exposure = lux.max(0.0);
+        tracing::debug!(lux = self.light_exposure, "light exposure set");
     }
 
     /// Update hormonal rhythms based on current phase.
@@ -67,6 +83,7 @@ impl CircadianState {
     }
 
     /// Alertness derived from circadian state (inverse melatonin, plus temperature).
+    #[inline]
     #[must_use]
     pub fn alertness(&self) -> f32 {
         ((1.0 - self.melatonin) * 0.6 + (self.temperature_deviation + 0.5) * 0.4).clamp(0.0, 1.0)
@@ -74,6 +91,7 @@ impl CircadianState {
 }
 
 /// Melatonin curve: cosine with peak at 3 AM.
+#[inline]
 #[must_use]
 fn melatonin_curve(hour: f32) -> f32 {
     // Peak at 3.0, trough at 15.0
@@ -82,6 +100,7 @@ fn melatonin_curve(hour: f32) -> f32 {
 }
 
 /// Cortisol CAR curve: cosine with peak at 8 AM.
+#[inline]
 #[must_use]
 fn cortisol_curve(hour: f32) -> f32 {
     let phase = (hour - 8.0) * core::f32::consts::TAU / 24.0;
@@ -89,6 +108,7 @@ fn cortisol_curve(hour: f32) -> f32 {
 }
 
 /// Core body temperature curve: cosine with peak at 19:00 (7 PM).
+#[inline]
 #[must_use]
 fn temperature_curve(hour: f32) -> f32 {
     let phase = (hour - 19.0) * core::f32::consts::TAU / 24.0;
@@ -116,22 +136,26 @@ mod tests {
     #[test]
     fn test_tick_advances_phase() {
         let mut c = CircadianState::default();
-        c.tick(6.0);
+        c.tick(6.0).unwrap();
         assert!((c.phase_hours - 14.0).abs() < f32::EPSILON);
     }
 
     #[test]
     fn test_light_suppresses_melatonin() {
-        let mut dark = CircadianState::default();
-        dark.phase_hours = 3.0;
-        dark.light_exposure = 0.0;
-        dark.tick(0.0);
+        let mut dark = CircadianState {
+            phase_hours: 3.0,
+            light_exposure: 0.0,
+            ..Default::default()
+        };
+        dark.tick(0.0).unwrap();
         let dark_mel = dark.melatonin;
 
-        let mut bright = CircadianState::default();
-        bright.phase_hours = 3.0;
-        bright.light_exposure = 1000.0;
-        bright.tick(0.0);
+        let mut bright = CircadianState {
+            phase_hours: 3.0,
+            light_exposure: 1000.0,
+            ..Default::default()
+        };
+        bright.tick(0.0).unwrap();
         assert!(bright.melatonin < dark_mel);
     }
 
@@ -141,5 +165,49 @@ mod tests {
         let json = serde_json::to_string(&c).unwrap();
         let c2: CircadianState = serde_json::from_str(&json).unwrap();
         assert!((c2.phase_hours - c.phase_hours).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_negative_dt_rejected() {
+        let mut c = CircadianState::default();
+        assert!(c.tick(-1.0).is_err());
+    }
+
+    #[test]
+    fn test_alertness() {
+        // Morning alertness should be high
+        let mut morning = CircadianState::default(); // phase 8.0
+        morning.tick(0.0).unwrap();
+        let morning_alert = morning.alertness();
+
+        // Middle of night alertness should be low
+        let mut night = CircadianState {
+            phase_hours: 3.0,
+            light_exposure: 0.0,
+            ..Default::default()
+        };
+        night.tick(0.0).unwrap();
+        let night_alert = night.alertness();
+
+        assert!(morning_alert > night_alert);
+    }
+
+    #[test]
+    fn test_phase_wraps_at_24() {
+        let mut c = CircadianState {
+            phase_hours: 23.0,
+            ..Default::default()
+        };
+        c.tick(3.0).unwrap();
+        assert!((c.phase_hours - 2.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_temperature_curve_range() {
+        // Temperature deviation should be within ±0.5°C
+        for hour in 0..24 {
+            let t = temperature_curve(hour as f32);
+            assert!((-0.5..=0.5).contains(&t), "temp at hour {hour}: {t}");
+        }
     }
 }

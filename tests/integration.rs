@@ -16,7 +16,9 @@ fn test_neurotransmitter_profile_serde_roundtrip() {
     let deserialized: NeurotransmitterProfile = serde_json::from_str(&json).unwrap();
     assert!((deserialized.serotonin.level - profile.serotonin.level).abs() < f32::EPSILON);
     assert!((deserialized.dopamine.level - profile.dopamine.level).abs() < f32::EPSILON);
-    assert!((deserialized.norepinephrine.level - profile.norepinephrine.level).abs() < f32::EPSILON);
+    assert!(
+        (deserialized.norepinephrine.level - profile.norepinephrine.level).abs() < f32::EPSILON
+    );
     assert!((deserialized.gaba.level - profile.gaba.level).abs() < f32::EPSILON);
     assert!((deserialized.glutamate.level - profile.glutamate.level).abs() < f32::EPSILON);
     assert!((deserialized.oxytocin.level - profile.oxytocin.level).abs() < f32::EPSILON);
@@ -71,8 +73,8 @@ fn test_circuit_serde_roundtrip() {
     let mut circuit = Circuit::new();
     let a = circuit.add_population(NeuralPopulation::new("excitatory", 0.3, 0.1, true));
     let b = circuit.add_population(NeuralPopulation::new("inhibitory", 0.2, 0.2, false));
-    circuit.add_synapse(a, b, 0.5);
-    circuit.add_synapse(b, a, -0.3);
+    circuit.add_synapse(a, b, 0.5).unwrap();
+    circuit.add_synapse(b, a, -0.3).unwrap();
 
     let json = serde_json::to_string(&circuit).unwrap();
     let deserialized: Circuit = serde_json::from_str(&json).unwrap();
@@ -138,7 +140,7 @@ fn test_stress_raises_arousal() {
 fn test_sleep_pressure_rises_during_wake() {
     let mut sleep = SleepState::default();
     let initial_pressure = sleep.sleep_pressure();
-    sleep.tick_adenosine(16.0); // 16 hours awake
+    sleep.tick_adenosine(16.0).unwrap(); // 16 hours awake
     assert!(sleep.sleep_pressure() > initial_pressure);
 }
 
@@ -148,7 +150,7 @@ fn test_hpa_stress_cascade_propagates() {
     let initial_cortisol = hpa.cortisol;
     hpa.stress(0.9);
     for _ in 0..20 {
-        hpa.tick(0.5);
+        hpa.tick(0.5).unwrap();
     }
     assert!(hpa.cortisol > initial_cortisol);
 }
