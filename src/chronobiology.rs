@@ -21,6 +21,14 @@ pub struct CircadianState {
     pub temperature_deviation: f32,
     /// Light exposure (lux, used for entrainment).
     pub light_exposure: f32,
+    /// Photoperiod: hours of daylight (6.0–18.0). Affects serotonin synthesis.
+    /// Default 12.0 (equinox). Short photoperiod (winter) → SAD-like effects.
+    #[serde(default = "default_photoperiod")]
+    pub photoperiod_hours: f32,
+}
+
+fn default_photoperiod() -> f32 {
+    12.0
 }
 
 impl Default for CircadianState {
@@ -31,6 +39,7 @@ impl Default for CircadianState {
             cortisol_circadian: 0.0,
             temperature_deviation: 0.0,
             light_exposure: 500.0,
+            photoperiod_hours: default_photoperiod(),
         };
         state.update_rhythms();
         state
@@ -53,6 +62,23 @@ impl CircadianState {
         self.phase_hours = (self.phase_hours + dt_hours) % 24.0;
         self.update_rhythms();
         Ok(())
+    }
+
+    /// Set photoperiod (daylight hours). Clamps to 6.0–18.0.
+    #[inline]
+    pub fn set_photoperiod(&mut self, hours: f32) {
+        self.photoperiod_hours = hours.clamp(6.0, 18.0);
+        tracing::debug!(photoperiod = self.photoperiod_hours, "photoperiod set");
+    }
+
+    /// Serotonin synthesis rate modifier from photoperiod (0.7–1.3).
+    ///
+    /// Light-driven tryptophan hydroxylase expression (Lambert 2002).
+    /// Short photoperiod (winter, ~8h) → 0.7; equinox (12h) → 1.0; long (16h+) → 1.3.
+    #[inline]
+    #[must_use]
+    pub fn serotonin_photoperiod_modifier(&self) -> f32 {
+        0.7 + 0.6 * ((self.photoperiod_hours - 6.0) / 12.0).clamp(0.0, 1.0)
     }
 
     /// Set current light exposure (lux).

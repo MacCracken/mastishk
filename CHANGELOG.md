@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-03-31
+
+### Added
+- **spiking** — Full-fidelity spiking neural network models: `IzhikevichNeuron` (2003 paper, 4 presets: regular spiking, fast spiking, chattering, intrinsically bursting), `LifNeuron` (leaky integrate-and-fire), `SpikingNeuron` enum, `SpikingNetwork` with synaptic propagation + delay, `StdpRule` (spike-timing-dependent plasticity), `BcmRule` (BCM sliding threshold). Standalone ms-timescale module
+- **circuit** — `apply_hebbian(learning_rate)` for rate-model synaptic plasticity
+- **inflammation** — `InflammationState`: microglial activation, pro-inflammatory cytokines (simplified IL-1β/IL-6/TNF-α), neuroinflammation, sickness behavior, tryptophan depletion (IDO pathway → reduced serotonin synthesis)
+- **gut_brain** — `GutBrainState`: enteric serotonin (95% of body 5-HT), vagal tone, microbiome diversity, interoceptive gut signal. `central_serotonin_modifier()`, `vagal_stress_buffer()`
+- **autonomic** — `AutonomicState`: sympathetic/parasympathetic reciprocal inhibition, HRV proxy. Driven by NE, cortisol, amygdala threat, vagal tone
+- **eeg** — `EegState`: delta/theta/alpha/beta/gamma band powers derived from brain state (sleep stage, PFC focus, meditation, amygdala activation). `EegBand` enum, `dominant_band()`, `tick_toward()` smooth transitions
+- **chronobiology** — `photoperiod_hours` field, `serotonin_photoperiod_modifier()` (0.7–1.3, Lambert 2002). Short winter days → SAD-like serotonin reduction
+- **brain** — `AgeProfile` with `pfc_maturation()` (sigmoid ~25), `dopamine_capacity()` (-10%/decade after 40), `deep_sleep_capacity()`. `InteroceptiveState` (Seth 2013 predictive processing: body prediction, prediction error → anxiety). 6 new `#[serde(default)]` fields. Tick expanded to ~30 steps with inflammation/gut-brain/autonomic/interoception/EEG/photoperiod/age integration
+- **bridge** — 7 new bridge functions: inflammation sickness, sympathetic/parasympathetic activation, HRV, interoceptive anxiety, EEG dominant band, seasonal modifier. `BrainMoodEffect` extended with 6 new fields
+
 ### Added (Domain Accuracy — external review)
 - **neurotransmitter** — Histamine transmitter: primary wakefulness signal (tuberomammillary nucleus), high during wake, near-zero during all sleep stages (Saper 2005 flip-flop model). Integrated into sleep-NT coupling targets
 - **neurotransmitter** — Endocannabinoid system (anandamide/2-AG): stress buffer via retrograde CB1 signaling, dampens glutamate/GABA release, modulates HPA recovery and pain

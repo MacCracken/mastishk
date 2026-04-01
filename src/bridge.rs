@@ -15,10 +15,13 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::brain::BrainState;
+use crate::autonomic::AutonomicState;
+use crate::brain::{BrainState, InteroceptiveState};
 use crate::chronobiology::CircadianState;
 use crate::dmn::DmnState;
+use crate::eeg::EegState;
 use crate::hpa::HpaState;
+use crate::inflammation::InflammationState;
 use crate::neurotransmitter::NeurotransmitterProfile;
 use crate::regions::{
     AmygdalaState, BasalGangliaState, CerebellumState, HippocampusState, PfcState,
@@ -223,6 +226,57 @@ pub fn cerebellum_timing(cerebellum: &CerebellumState) -> f64 {
     f64::from(cerebellum.timing_quality())
 }
 
+// ── Body Systems ───────────────────────────────────────────────────
+
+/// Sickness behavior intensity from neuroinflammation (0.0–1.0).
+#[inline]
+#[must_use]
+pub fn inflammation_sickness(inflammation: &InflammationState) -> f64 {
+    f64::from(inflammation.sickness_behavior)
+}
+
+/// Sympathetic nervous system activation (0.0–1.0).
+#[inline]
+#[must_use]
+pub fn sympathetic_activation(autonomic: &AutonomicState) -> f64 {
+    f64::from(autonomic.sympathetic)
+}
+
+/// Parasympathetic nervous system activation (0.0–1.0).
+#[inline]
+#[must_use]
+pub fn parasympathetic_activation(autonomic: &AutonomicState) -> f64 {
+    f64::from(autonomic.parasympathetic)
+}
+
+/// Heart rate variability proxy (0.0–1.0). Higher = better regulation.
+#[inline]
+#[must_use]
+pub fn heart_rate_variability(autonomic: &AutonomicState) -> f64 {
+    f64::from(autonomic.hrv)
+}
+
+/// Interoceptive prediction error → anxiety contribution (0.0–1.0).
+#[inline]
+#[must_use]
+pub fn interoceptive_anxiety(interoception: &InteroceptiveState) -> f64 {
+    f64::from(interoception.anxiety_contribution())
+}
+
+/// EEG dominant frequency band.
+#[inline]
+#[must_use]
+pub fn eeg_dominant_band(eeg: &EegState) -> crate::eeg::EegBand {
+    eeg.dominant_band()
+}
+
+/// Seasonal serotonin synthesis modifier from photoperiod (0.7–1.3).
+#[inline]
+#[must_use]
+pub fn seasonal_serotonin_modifier(circadian: &CircadianState) -> f64 {
+    f64::from(circadian.serotonin_photoperiod_modifier())
+}
+
 // ── Composite ──────────────────────────────────────────────────────
 
 /// All bhava-relevant outputs from brain state in a single struct.
@@ -275,6 +329,18 @@ pub struct BrainMoodEffect {
     pub habit_level: f64,
     /// Cerebellum motor output quality (0.0–1.0).
     pub motor_quality: f64,
+    /// Sickness behavior from neuroinflammation (0.0–1.0).
+    pub sickness_behavior: f64,
+    /// Sympathetic activation (0.0–1.0).
+    pub sympathetic: f64,
+    /// Parasympathetic activation (0.0–1.0).
+    pub parasympathetic: f64,
+    /// Heart rate variability proxy (0.0–1.0).
+    pub hrv: f64,
+    /// Interoceptive anxiety from prediction error (0.0–1.0).
+    pub interoceptive_anxiety: f64,
+    /// Seasonal serotonin modifier (0.7–1.3).
+    pub seasonal_modifier: f64,
 }
 
 /// Compute all bhava-relevant outputs from a complete brain state.
@@ -303,6 +369,12 @@ pub fn brain_mood_modifiers(state: &BrainState) -> BrainMoodEffect {
         action_drive: basal_ganglia_action_drive(&state.basal_ganglia),
         habit_level: basal_ganglia_habit_level(&state.basal_ganglia),
         motor_quality: cerebellum_motor_quality(&state.cerebellum),
+        sickness_behavior: inflammation_sickness(&state.inflammation),
+        sympathetic: sympathetic_activation(&state.autonomic),
+        parasympathetic: parasympathetic_activation(&state.autonomic),
+        hrv: heart_rate_variability(&state.autonomic),
+        interoceptive_anxiety: interoceptive_anxiety(&state.interoception),
+        seasonal_modifier: seasonal_serotonin_modifier(&state.circadian),
     }
 }
 

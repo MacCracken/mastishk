@@ -1,0 +1,8 @@
+timestamp,commit,branch,benchmark,estimate_ns
+2026-04-01T04:42:25Z,51718e7,main,neurotransmitter_tick_all,60.241
+2026-04-01T04:42:25Z,51718e7,main,circuit_tick_4pop_5syn,99.000
+2026-04-01T04:42:25Z,51718e7,main,hpa_tick,26.304
+2026-04-01T04:42:25Z,51718e7,main,brain_state_tick,479.42
+2026-04-01T04:42:25Z,51718e7,main,brain_state_tick_with_drugs,641.45
+2026-04-01T04:42:25Z,51718e7,main,composite_arousal,3.0563
+2026-04-01T04:42:25Z,51718e7,main,composite_stress,1.3156

@@ -176,6 +176,24 @@ impl Circuit {
         }
         Ok(())
     }
+
+    /// Apply Hebbian learning to synaptic weights.
+    ///
+    /// Strengthens synapses where pre and post populations are coactive,
+    /// weakens where uncorrelated. Weight change: `dw = learning_rate * pre_rate * post_rate`.
+    /// Weights clamped to `[-1.0, 1.0]`.
+    #[inline]
+    pub fn apply_hebbian(&mut self, learning_rate: f32) {
+        for syn in &mut self.synapses {
+            if syn.from < self.populations.len() && syn.to < self.populations.len() {
+                let pre = self.populations[syn.from].rate;
+                let post = self.populations[syn.to].rate;
+                syn.weight += learning_rate * pre * post;
+                syn.weight = syn.weight.clamp(-1.0, 1.0);
+            }
+        }
+        tracing::trace!(learning_rate, "Hebbian learning applied");
+    }
 }
 
 impl Default for Circuit {

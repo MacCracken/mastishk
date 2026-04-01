@@ -45,19 +45,24 @@
 //! rasayan — biochemistry (enzyme kinetics, metabolic pathways)
 //! ```
 
+pub mod autonomic;
 pub mod brain;
 pub mod bridge;
 pub mod chronobiology;
 pub mod circuit;
 pub mod coupling;
 pub mod dmn;
+pub mod eeg;
 pub mod error;
+pub mod gut_brain;
 pub mod hpa;
+pub mod inflammation;
 pub mod neurotransmitter;
 pub mod pharmacology;
 pub mod receptor;
 pub mod regions;
 pub mod sleep;
+pub mod spiking;
 
 #[cfg(feature = "logging")]
 pub mod logging;
