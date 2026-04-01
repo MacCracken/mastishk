@@ -26,6 +26,10 @@
 //!   circadian→HPA, DMN→HPA, arousal→circuit. Composite metrics.
 //! - [`brain`] — Unified [`brain::BrainState`] orchestrating all subsystems
 //!   with a single `tick(dt)`.
+//! - [`receptor`] — Receptor subtypes (5-HT1A/2A, D1/D2, adrenergic, GABA-A/B),
+//!   availability dynamics, desensitization/upregulation ODE.
+//! - [`pharmacology`] — Drug profiles, pharmacokinetics, Hill equation dose-response,
+//!   preset drugs (SSRIs, benzodiazepines, stimulants).
 //!
 //! # Relationship to Other Crates
 //!
@@ -47,6 +51,8 @@ pub mod dmn;
 pub mod error;
 pub mod hpa;
 pub mod neurotransmitter;
+pub mod pharmacology;
+pub mod receptor;
 pub mod sleep;
 
 #[cfg(feature = "logging")]

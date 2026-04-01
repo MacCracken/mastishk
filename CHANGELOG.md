@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-31
+
+### Added
+- **receptor** — New module: `ReceptorSubtype` enum (Ht1a, Ht2a, D1, D2, Alpha1, Alpha2, Beta, GabaA, GabaB), `ReceptorState` with desensitization/upregulation ODE, `ReceptorMap` with per-receptor parameterized turnover rates, `ReceptorOccupancies` for aggregate drug occupancy
+- **pharmacology** — New module: `DrugProfile` (receptor bindings, PK parameters), `ActiveDrug` (two-phase pharmacokinetics: absorption + elimination), `PharmacologyState` (receptor map + active drugs + NT coupling), Hill equation dose-response, Clark occupancy model
+- **pharmacology** — Drug mechanism types: `ReuptakeInhibitor` (reduces clearance rate), `Agonist` (raises baseline), `Antagonist` (lowers baseline), `PositiveAllostericModulator` (GABA PAM multiplier for circuit gain)
+- **pharmacology** — Preset drug constructors: `ssri_fluoxetine`, `ssri_sertraline`, `benzodiazepine_diazepam`, `benzodiazepine_alprazolam`, `stimulant_amphetamine`, `stimulant_methylphenidate`
+- **pharmacology** — `ClearanceRateSnapshot` for drift-free rate restoration each tick
+- **brain** — `BrainState::administer_drug()` convenience method, pharmacology tick step in causal order
+- **error** — `InvalidDrugParameter` error variant
+
+### Changed
+- **coupling** — `compute_circuit_gain` and `apply_arousal_circuit_coupling` now accept `gaba_pam` parameter for benzodiazepine-class PAM amplification of GABA inhibition
+- **brain** — Tick order expanded: pharmacology step inserted between sleep→NT coupling and NT tick; circuit gain now incorporates GABA PAM from active drugs
+- **brain** — `BrainState.pharmacology` field added with `#[serde(default)]` for backward-compatible deserialization
+
 ## [0.2.0] - 2026-03-31
 
 ### Added

@@ -6,6 +6,7 @@ use mastishk::circuit::{Circuit, NeuralPopulation};
 use mastishk::dmn::DmnState;
 use mastishk::hpa::HpaState;
 use mastishk::neurotransmitter::NeurotransmitterProfile;
+use mastishk::pharmacology::DrugProfile;
 use mastishk::sleep::{SleepStage, SleepState};
 
 // ── Serde roundtrip tests ──────────────────────────────────────────
@@ -224,4 +225,60 @@ fn test_full_day_subsystem_coherence() {
     assert!((0.0..=1.0).contains(&brain.neurotransmitter.serotonin.level));
     assert!((0.0..=1.0).contains(&brain.hpa.cortisol));
     assert!((0.0..=1.0).contains(&brain.circadian.melatonin));
+}
+
+// ── Pharmacology integration ───────────────────────────────────────
+
+#[test]
+fn test_ssri_raises_serotonin_over_time() {
+    let mut brain = BrainState::default();
+    brain.administer_drug(DrugProfile::ssri_fluoxetine(), 0.8);
+
+    // Simulate 2 hours (past onset, drug is active)
+    for _ in 0..7200 {
+        brain.tick(1.0).unwrap();
+    }
+
+    // Serotonin clearance should be reduced, causing level to stay elevated
+    let default_clearance = NeurotransmitterProfile::default().serotonin.clearance_rate;
+    assert!(brain.neurotransmitter.serotonin.clearance_rate < default_clearance);
+}
+
+#[test]
+fn test_benzodiazepine_amplifies_gaba_in_circuit() {
+    let mut brain = BrainState::default();
+    let a = brain
+        .circuit
+        .add_population(NeuralPopulation::new("exc", 0.5, 0.1, true));
+    let b = brain
+        .circuit
+        .add_population(NeuralPopulation::new("inh", 0.3, 0.2, false));
+    brain.circuit.add_synapse(a, b, 0.5).unwrap();
+
+    brain.administer_drug(DrugProfile::benzodiazepine_diazepam(), 0.7);
+
+    // Past onset
+    for _ in 0..3600 {
+        brain.tick(1.0).unwrap();
+    }
+
+    assert!(brain.pharmacology.gaba_pam_multiplier() > 1.0);
+}
+
+#[test]
+fn test_drug_with_brain_state_stability_24hr() {
+    let mut brain = BrainState::default();
+    brain.administer_drug(DrugProfile::ssri_fluoxetine(), 0.5);
+    brain.administer_drug(DrugProfile::benzodiazepine_diazepam(), 0.3);
+
+    // Simulate 24 hours in 1-minute steps
+    for _ in 0..1440 {
+        brain.tick(60.0).unwrap();
+    }
+
+    // All values should remain in valid ranges
+    assert!((0.0..=1.0).contains(&brain.neurotransmitter.serotonin.level));
+    assert!((0.0..=1.0).contains(&brain.hpa.cortisol));
+    assert!((0.0..=1.0).contains(&brain.arousal()));
+    assert!((0.0..=1.0).contains(&brain.stress()));
 }

@@ -26,6 +26,10 @@ pub enum MastishkError {
     /// Negative time delta.
     #[error("negative time delta: {0}")]
     NegativeTimeDelta(f32),
+
+    /// Invalid drug parameter.
+    #[error("invalid drug parameter: {0}")]
+    InvalidDrugParameter(String),
 }
 
 /// Validate that a time delta is non-negative.

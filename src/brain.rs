@@ -18,6 +18,7 @@ use crate::dmn::DmnState;
 use crate::error::{MastishkError, validate_dt};
 use crate::hpa::HpaState;
 use crate::neurotransmitter::NeurotransmitterProfile;
+use crate::pharmacology::{DrugProfile, PharmacologyState};
 use crate::sleep::SleepState;
 
 /// Unified brain state combining all neuroscience subsystems with cross-module coupling.
@@ -45,6 +46,9 @@ pub struct BrainState {
     pub circadian: CircadianState,
     /// Cross-module coupling parameters.
     pub coupling: CouplingParams,
+    /// Receptor pharmacology (active drugs, receptor states).
+    #[serde(default)]
+    pub pharmacology: PharmacologyState,
 }
 
 impl BrainState {
@@ -55,11 +59,12 @@ impl BrainState {
     /// 1. Circadian tick — master clock, independent
     /// 2. Circadian → HPA coupling — sets cortisol baseline from CAR
     /// 3. Sleep → neurotransmitter coupling — sets NT baselines from sleep stage
-    /// 4. Neurotransmitter tick — NTs move toward new baselines
-    /// 5. DMN → HPA coupling — rumination as chronic stressor
-    /// 6. HPA tick — cascade with updated baseline and stress input
-    /// 7. Arousal → circuit coupling — NE/glutamate modulate synaptic gain, tick circuit
-    /// 8. Sleep tick — adenosine dynamics (slowest system)
+    /// 4. Pharmacology tick — drug PK, receptor desensitization, NT rate/baseline modification
+    /// 5. Neurotransmitter tick — NTs move toward new baselines with modified rates
+    /// 6. DMN → HPA coupling — rumination as chronic stressor
+    /// 7. HPA tick — cascade with updated baseline and stress input
+    /// 8. Arousal → circuit coupling — NE/glutamate modulate synaptic gain (with GABA PAM), tick circuit
+    /// 9. Sleep tick — adenosine dynamics (slowest system)
     ///
     /// # Errors
     /// Returns [`MastishkError::NegativeTimeDelta`] if `dt < 0.0`.
@@ -89,27 +94,36 @@ impl BrainState {
             dt,
         )?;
 
-        // 4. Neurotransmitter tick (decay toward baselines)
+        // 4. Pharmacology (drug PK, receptor desensitization, NT modification)
+        self.pharmacology.tick(dt, &mut self.neurotransmitter)?;
+
+        // 5. Neurotransmitter tick (decay toward baselines with modified rates)
         self.neurotransmitter.tick_all(dt)?;
 
-        // 5. DMN → HPA (rumination as chronic stressor)
+        // 6. DMN → HPA (rumination as chronic stressor)
         apply_dmn_hpa_coupling(&self.dmn, &mut self.hpa, &self.coupling, dt)?;
 
-        // 6. HPA tick (cascade with updated inputs)
+        // 7. HPA tick (cascade with updated inputs)
         self.hpa.tick(dt)?;
 
-        // 7. Arousal → circuit (neuromodulatory gain + circuit tick)
+        // 8. Arousal → circuit (neuromodulatory gain + GABA PAM + circuit tick)
         apply_arousal_circuit_coupling(
             &self.neurotransmitter,
             &mut self.circuit,
             &self.coupling.circuit_gain,
+            self.pharmacology.gaba_pam_multiplier(),
             dt,
         )?;
 
-        // 8. Sleep adenosine dynamics
+        // 9. Sleep adenosine dynamics
         self.sleep.tick_adenosine(dt_hours)?;
 
         Ok(())
+    }
+
+    /// Administer a drug at the given normalized dose (0.0–1.0).
+    pub fn administer_drug(&mut self, profile: DrugProfile, dose: f32) {
+        self.pharmacology.administer(profile, dose);
     }
 
     /// Composite arousal level (0.0–1.0) combining neurotransmitter, circadian,

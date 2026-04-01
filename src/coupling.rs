@@ -208,20 +208,27 @@ pub fn apply_dmn_hpa_coupling(
 /// Compute neuromodulatory gain for circuit synaptic weights.
 ///
 /// NE and glutamate multiplicatively increase gain (GANE model), while GABA
-/// dampens it. The result is clamped to `[0.2, 3.0]` to prevent pathological
-/// states.
+/// dampens it. `gaba_pam` is a multiplier from benzodiazepine-class drugs
+/// (1.0 = no drug effect, >1.0 = amplified GABA inhibition). The result is
+/// clamped to `[0.2, 3.0]` to prevent pathological states.
 #[inline]
 #[must_use]
-pub fn compute_circuit_gain(ne: f32, glutamate: f32, gaba: f32, params: &CircuitGainParams) -> f32 {
+pub fn compute_circuit_gain(
+    ne: f32,
+    glutamate: f32,
+    gaba: f32,
+    gaba_pam: f32,
+    params: &CircuitGainParams,
+) -> f32 {
     (1.0 + params.k_ne * ne + params.k_glu * glutamate + params.k_interact * ne * glutamate
-        - params.k_gaba * gaba)
+        - params.k_gaba * gaba * gaba_pam)
         .clamp(0.2, 3.0)
 }
 
 /// Apply neuromodulatory gain to a circuit and tick it.
 ///
-/// Computes gain from current neurotransmitter levels, then calls
-/// [`Circuit::tick_with_gain`].
+/// Computes gain from current neurotransmitter levels (with optional GABA PAM
+/// amplification from benzodiazepines), then calls [`Circuit::tick_with_gain`].
 ///
 /// # Errors
 /// Returns [`MastishkError::NegativeTimeDelta`] if `dt < 0.0`.
@@ -230,15 +237,17 @@ pub fn apply_arousal_circuit_coupling(
     profile: &NeurotransmitterProfile,
     circuit: &mut Circuit,
     params: &CircuitGainParams,
+    gaba_pam: f32,
     dt: f32,
 ) -> Result<(), MastishkError> {
     let gain = compute_circuit_gain(
         profile.norepinephrine.level,
         profile.glutamate.level,
         profile.gaba.level,
+        gaba_pam,
         params,
     );
-    tracing::trace!(gain, "arousal-circuit coupling applied");
+    tracing::trace!(gain, gaba_pam, "arousal-circuit coupling applied");
     circuit.tick_with_gain(gain, dt)
 }
 
@@ -436,8 +445,8 @@ mod tests {
     fn test_circuit_gain_default_params() {
         let params = CircuitGainParams::default();
         // Default NT levels: NE=0.3, Glu=0.5, GABA=0.5
-        let gain = compute_circuit_gain(0.3, 0.5, 0.5, &params);
-        // 1.0 + 0.3*0.3 + 0.2*0.5 + 0.1*0.3*0.5 - 0.4*0.5
+        let gain = compute_circuit_gain(0.3, 0.5, 0.5, 1.0, &params);
+        // 1.0 + 0.3*0.3 + 0.2*0.5 + 0.1*0.3*0.5 - 0.4*0.5*1.0
         // = 1.0 + 0.09 + 0.10 + 0.015 - 0.20 = 1.005
         assert!((gain - 1.005).abs() < 0.01);
     }
@@ -450,7 +459,7 @@ mod tests {
             k_interact: 0.0,
             k_gaba: 10.0, // extreme inhibition
         };
-        let gain = compute_circuit_gain(0.0, 0.0, 1.0, &params);
+        let gain = compute_circuit_gain(0.0, 0.0, 1.0, 1.0, &params);
         assert!((gain - 0.2).abs() < f32::EPSILON); // clamped to floor
     }
 
@@ -462,7 +471,7 @@ mod tests {
             k_interact: 10.0,
             k_gaba: 0.0,
         };
-        let gain = compute_circuit_gain(1.0, 1.0, 0.0, &params);
+        let gain = compute_circuit_gain(1.0, 1.0, 0.0, 1.0, &params);
         assert!((gain - 3.0).abs() < f32::EPSILON); // clamped to ceiling
     }
 
@@ -474,8 +483,14 @@ mod tests {
         let b = circuit.add_population(crate::circuit::NeuralPopulation::new("B", 0.1, 0.1, true));
         circuit.add_synapse(a, b, 0.5).unwrap();
 
-        apply_arousal_circuit_coupling(&profile, &mut circuit, &CircuitGainParams::default(), 0.5)
-            .unwrap();
+        apply_arousal_circuit_coupling(
+            &profile,
+            &mut circuit,
+            &CircuitGainParams::default(),
+            1.0,
+            0.5,
+        )
+        .unwrap();
         // B should have moved from resting rate
         assert!(circuit.populations[b].rate > 0.1);
     }

@@ -5,6 +5,7 @@ use mastishk::circuit::{Circuit, NeuralPopulation};
 use mastishk::coupling::{composite_arousal, composite_stress};
 use mastishk::hpa::HpaState;
 use mastishk::neurotransmitter::NeurotransmitterProfile;
+use mastishk::pharmacology::DrugProfile;
 
 fn bench_neurotransmitter_tick(c: &mut Criterion) {
     let mut profile = NeurotransmitterProfile::default();
@@ -98,12 +99,38 @@ fn bench_composite_metrics(c: &mut Criterion) {
     });
 }
 
+fn bench_brain_with_drugs(c: &mut Criterion) {
+    let mut brain = BrainState::default();
+    let a = brain
+        .circuit
+        .add_population(NeuralPopulation::new("exc", 0.5, 0.1, true));
+    let b = brain
+        .circuit
+        .add_population(NeuralPopulation::new("inh", 0.2, 0.2, false));
+    brain.circuit.add_synapse(a, b, 0.5).unwrap();
+    brain.administer_drug(DrugProfile::ssri_fluoxetine(), 0.5);
+    brain.administer_drug(DrugProfile::benzodiazepine_diazepam(), 0.3);
+    // Absorb past onset
+    for _ in 0..7200 {
+        brain.tick(1.0).unwrap();
+    }
+
+    c.bench_function("brain_state_tick_with_drugs", |bench| {
+        bench.iter(|| {
+            let mut b = brain.clone();
+            b.tick(black_box(0.016)).unwrap();
+            b
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_neurotransmitter_tick,
     bench_circuit_tick,
     bench_hpa_tick,
     bench_brain_state_tick,
+    bench_brain_with_drugs,
     bench_composite_metrics
 );
 criterion_main!(benches);
