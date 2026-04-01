@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-31
+
+### Added
+- **regions** — New module: 5 brain region models — `PfcState` (executive function, impulse control, working memory with fatigue/ego depletion), `AmygdalaState` (threat detection, fear conditioning, emotional salience, habituation), `HippocampusState` (memory encoding, consolidation, context signal, neurogenesis), `BasalGangliaState` (Go/No-Go pathways, reward prediction error, habit formation), `CerebellumState` (motor precision, timing accuracy, error correction, coordination)
+- **coupling** — 6 new brain region coupling functions: NT→PFC (dopamine inverted-U on WM, serotonin→impulse control, cortisol/sleep debt impairment), NT→amygdala (NE amplifies, serotonin/GABA/PFC dampen), NT→hippocampus (ACh→encoding, BDNF→neurogenesis, amygdala salience→emotional memory, sleep→consolidation), amygdala→HPA (threat→stress), NT→basal ganglia (dopamine Go/No-Go, PFC goal bias), NT→cerebellum (BDNF→adaptation, sleep debt→precision)
+- **coupling** — `RegionCouplingParams` for tunable region coupling strengths
+- **bridge** — 10 new region bridge functions: PFC executive/WM, amygdala fear/salience, hippocampus learning/context, basal ganglia action drive/habit, cerebellum motor quality. Extended `BrainMoodEffect` with 8 new fields
+- **bridge** — Bhava bridge complete: 13 NT/HPA/sleep/DMN output functions + `BrainMoodEffect` composite struct with `brain_mood_modifiers()` aggregator
+
+### Changed
+- **brain** — Tick order expanded from 9 to 20 steps: region couplings and ticks integrated in correct causal order (sensory→executive→motor). 5 new `#[serde(default)]` region fields on `BrainState`
+
 ## [0.3.0] - 2026-03-31
 
 ### Added

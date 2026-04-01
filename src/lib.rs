@@ -26,6 +26,8 @@
 //!   circadian→HPA, DMN→HPA, arousal→circuit. Composite metrics.
 //! - [`brain`] — Unified [`brain::BrainState`] orchestrating all subsystems
 //!   with a single `tick(dt)`.
+//! - [`bridge`] — f64 output functions for downstream consumers (bhava).
+//!   Maps neural state to emotion/personality-relevant values.
 //! - [`receptor`] — Receptor subtypes (5-HT1A/2A, D1/D2, adrenergic, GABA-A/B),
 //!   availability dynamics, desensitization/upregulation ODE.
 //! - [`pharmacology`] — Drug profiles, pharmacokinetics, Hill equation dose-response,
@@ -44,6 +46,7 @@
 //! ```
 
 pub mod brain;
+pub mod bridge;
 pub mod chronobiology;
 pub mod circuit;
 pub mod coupling;
@@ -53,6 +56,7 @@ pub mod hpa;
 pub mod neurotransmitter;
 pub mod pharmacology;
 pub mod receptor;
+pub mod regions;
 pub mod sleep;
 
 #[cfg(feature = "logging")]

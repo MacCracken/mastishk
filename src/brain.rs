@@ -10,8 +10,10 @@ use serde::{Deserialize, Serialize};
 use crate::chronobiology::CircadianState;
 use crate::circuit::Circuit;
 use crate::coupling::{
-    CouplingParams, apply_arousal_circuit_coupling, apply_circadian_hpa_coupling,
-    apply_dmn_hpa_coupling, apply_sleep_neurotransmitter_coupling, composite_arousal,
+    CouplingParams, apply_amygdala_hpa_coupling, apply_arousal_circuit_coupling,
+    apply_circadian_hpa_coupling, apply_dmn_hpa_coupling, apply_nt_amygdala_coupling,
+    apply_nt_basal_ganglia_coupling, apply_nt_cerebellum_coupling, apply_nt_hippocampus_coupling,
+    apply_nt_pfc_coupling, apply_sleep_neurotransmitter_coupling, composite_arousal,
     composite_stress,
 };
 use crate::dmn::DmnState;
@@ -19,6 +21,9 @@ use crate::error::{MastishkError, validate_dt};
 use crate::hpa::HpaState;
 use crate::neurotransmitter::NeurotransmitterProfile;
 use crate::pharmacology::{DrugProfile, PharmacologyState};
+use crate::regions::{
+    AmygdalaState, BasalGangliaState, CerebellumState, HippocampusState, PfcState,
+};
 use crate::sleep::SleepState;
 
 /// Unified brain state combining all neuroscience subsystems with cross-module coupling.
@@ -49,6 +54,21 @@ pub struct BrainState {
     /// Receptor pharmacology (active drugs, receptor states).
     #[serde(default)]
     pub pharmacology: PharmacologyState,
+    /// Prefrontal cortex (executive function, impulse control, working memory).
+    #[serde(default)]
+    pub pfc: PfcState,
+    /// Amygdala (threat detection, fear conditioning, emotional salience).
+    #[serde(default)]
+    pub amygdala: AmygdalaState,
+    /// Hippocampus (memory formation, context encoding, neurogenesis).
+    #[serde(default)]
+    pub hippocampus: HippocampusState,
+    /// Basal ganglia (action selection, habits, reward prediction error).
+    #[serde(default)]
+    pub basal_ganglia: BasalGangliaState,
+    /// Cerebellum (motor precision, timing, error correction).
+    #[serde(default)]
+    pub cerebellum: CerebellumState,
 }
 
 impl BrainState {
@@ -56,15 +76,22 @@ impl BrainState {
     ///
     /// # Tick Order (causal flow)
     ///
-    /// 1. Circadian tick — master clock, independent
-    /// 2. Circadian → HPA coupling — sets cortisol baseline from CAR
-    /// 3. Sleep → neurotransmitter coupling — sets NT baselines from sleep stage
-    /// 4. Pharmacology tick — drug PK, receptor desensitization, NT rate/baseline modification
-    /// 5. Neurotransmitter tick — NTs move toward new baselines with modified rates
-    /// 6. DMN → HPA coupling — rumination as chronic stressor
-    /// 7. HPA tick — cascade with updated baseline and stress input
-    /// 8. Arousal → circuit coupling — NE/glutamate modulate synaptic gain (with GABA PAM), tick circuit
-    /// 9. Sleep tick — adenosine dynamics (slowest system)
+    ///  1. Circadian tick — master clock
+    ///  2. Circadian → HPA coupling
+    ///  3. Sleep → NT coupling
+    ///  4. Pharmacology tick
+    ///  5. NT tick
+    ///  6. NT → Amygdala coupling (sensory first)
+    ///  7. NT → Hippocampus coupling (context)
+    ///  8. NT → PFC coupling (executive)
+    ///  9. Amygdala → HPA coupling (threat → stress)
+    /// 10. DMN → HPA coupling
+    /// 11. HPA tick
+    /// 12. NT → Basal Ganglia coupling
+    /// 13. NT → Cerebellum coupling
+    /// 14. Region ticks (amygdala, hippocampus, PFC, basal ganglia, cerebellum)
+    /// 19. Arousal → circuit coupling
+    /// 20. Sleep tick
     ///
     /// # Errors
     /// Returns [`MastishkError::NegativeTimeDelta`] if `dt < 0.0`.
@@ -97,16 +124,77 @@ impl BrainState {
         // 4. Pharmacology (drug PK, receptor desensitization, NT modification)
         self.pharmacology.tick(dt, &mut self.neurotransmitter)?;
 
-        // 5. Neurotransmitter tick (decay toward baselines with modified rates)
+        // 5. Neurotransmitter tick
         self.neurotransmitter.tick_all(dt)?;
 
-        // 6. DMN → HPA (rumination as chronic stressor)
+        // 6. NT → Amygdala coupling (sensory region first)
+        apply_nt_amygdala_coupling(
+            &self.neurotransmitter,
+            &mut self.amygdala,
+            &self.pfc,
+            &self.coupling.region,
+            dt,
+        )?;
+
+        // 7. NT → Hippocampus coupling (context)
+        apply_nt_hippocampus_coupling(
+            &self.neurotransmitter,
+            &mut self.hippocampus,
+            &self.amygdala,
+            &self.sleep,
+            &self.coupling.region,
+            dt,
+        )?;
+
+        // 8. NT → PFC coupling (executive, reads amygdala/hippocampus)
+        apply_nt_pfc_coupling(
+            &self.neurotransmitter,
+            &mut self.pfc,
+            &self.hpa,
+            &self.sleep,
+            dt,
+        )?;
+
+        // 9. Amygdala → HPA coupling (threat → stress)
+        apply_amygdala_hpa_coupling(
+            &self.amygdala,
+            &mut self.hpa,
+            self.coupling.region.amygdala_hpa_gain,
+            dt,
+        )?;
+
+        // 10. DMN → HPA (rumination as chronic stressor)
         apply_dmn_hpa_coupling(&self.dmn, &mut self.hpa, &self.coupling, dt)?;
 
-        // 7. HPA tick (cascade with updated inputs)
+        // 11. HPA tick
         self.hpa.tick(dt)?;
 
-        // 8. Arousal → circuit (neuromodulatory gain + GABA PAM + circuit tick)
+        // 12. NT → Basal Ganglia coupling
+        apply_nt_basal_ganglia_coupling(
+            &self.neurotransmitter,
+            &mut self.basal_ganglia,
+            &self.pfc,
+            &self.hippocampus,
+            &self.coupling.region,
+            dt,
+        )?;
+
+        // 13. NT → Cerebellum coupling
+        apply_nt_cerebellum_coupling(
+            &self.neurotransmitter,
+            &mut self.cerebellum,
+            &self.sleep,
+            dt,
+        )?;
+
+        // 14-18. Region ticks
+        self.amygdala.tick(dt)?;
+        self.hippocampus.tick(dt)?;
+        self.pfc.tick(dt)?;
+        self.basal_ganglia.tick(dt)?;
+        self.cerebellum.tick(dt)?;
+
+        // 19. Arousal → circuit coupling
         apply_arousal_circuit_coupling(
             &self.neurotransmitter,
             &mut self.circuit,
@@ -115,7 +203,7 @@ impl BrainState {
             dt,
         )?;
 
-        // 9. Sleep adenosine dynamics
+        // 20. Sleep adenosine dynamics
         self.sleep.tick_adenosine(dt_hours)?;
 
         Ok(())
