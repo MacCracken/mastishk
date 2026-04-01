@@ -508,7 +508,9 @@ enum TransmitterTarget {
     Dopamine,
     Norepinephrine,
     Gaba,
+    Glutamate,
     Endocannabinoid,
+    Endorphins,
 }
 
 fn receptor_to_transmitter(subtype: ReceptorSubtype) -> TransmitterTarget {
@@ -520,6 +522,8 @@ fn receptor_to_transmitter(subtype: ReceptorSubtype) -> TransmitterTarget {
         }
         ReceptorSubtype::GabaA | ReceptorSubtype::GabaB => TransmitterTarget::Gaba,
         ReceptorSubtype::Cb1 => TransmitterTarget::Endocannabinoid,
+        ReceptorSubtype::MuOpioid => TransmitterTarget::Endorphins,
+        ReceptorSubtype::Nmda => TransmitterTarget::Glutamate,
     }
 }
 
@@ -537,7 +541,9 @@ fn get_clearance_rate_mut(nt: &mut NeurotransmitterProfile, target: TransmitterT
         TransmitterTarget::Dopamine => &mut nt.dopamine.clearance_rate,
         TransmitterTarget::Norepinephrine => &mut nt.norepinephrine.clearance_rate,
         TransmitterTarget::Gaba => &mut nt.gaba.clearance_rate,
+        TransmitterTarget::Glutamate => &mut nt.glutamate.clearance_rate,
         TransmitterTarget::Endocannabinoid => &mut nt.endocannabinoid.clearance_rate,
+        TransmitterTarget::Endorphins => &mut nt.endorphins.clearance_rate,
     }
 }
 
@@ -547,7 +553,9 @@ fn get_baseline_mut(nt: &mut NeurotransmitterProfile, target: TransmitterTarget)
         TransmitterTarget::Dopamine => &mut nt.dopamine.baseline,
         TransmitterTarget::Norepinephrine => &mut nt.norepinephrine.baseline,
         TransmitterTarget::Gaba => &mut nt.gaba.baseline,
+        TransmitterTarget::Glutamate => &mut nt.glutamate.baseline,
         TransmitterTarget::Endocannabinoid => &mut nt.endocannabinoid.baseline,
+        TransmitterTarget::Endorphins => &mut nt.endorphins.baseline,
     }
 }
 

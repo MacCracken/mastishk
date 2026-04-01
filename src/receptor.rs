@@ -49,6 +49,10 @@ pub enum ReceptorSubtype {
     GabaB,
     /// CB1 — cannabinoid receptor 1. Retrograde signaling, stress buffer, pain modulation.
     Cb1,
+    /// Mu-opioid (μ) — pain/endorphin system. Analgesia, euphoria, opioid drug target.
+    MuOpioid,
+    /// NMDA — glutamate ionotropic receptor. Learning/LTP, ketamine target.
+    Nmda,
 }
 
 /// A single receptor's dynamic state — tracks availability and adaptation.
@@ -130,6 +134,8 @@ pub struct ReceptorOccupancies {
     pub gaba_a: f32,
     pub gaba_b: f32,
     pub cb1: f32,
+    pub mu_opioid: f32,
+    pub nmda: f32,
 }
 
 impl ReceptorOccupancies {
@@ -148,6 +154,8 @@ impl ReceptorOccupancies {
             ReceptorSubtype::GabaA => self.gaba_a,
             ReceptorSubtype::GabaB => self.gaba_b,
             ReceptorSubtype::Cb1 => self.cb1,
+            ReceptorSubtype::MuOpioid => self.mu_opioid,
+            ReceptorSubtype::Nmda => self.nmda,
         }
     }
 
@@ -165,6 +173,8 @@ impl ReceptorOccupancies {
             ReceptorSubtype::GabaA => &mut self.gaba_a,
             ReceptorSubtype::GabaB => &mut self.gaba_b,
             ReceptorSubtype::Cb1 => &mut self.cb1,
+            ReceptorSubtype::MuOpioid => &mut self.mu_opioid,
+            ReceptorSubtype::Nmda => &mut self.nmda,
         };
         *field = (*field + value).min(1.0);
     }
@@ -194,6 +204,20 @@ pub struct ReceptorMap {
     /// CB1 — cannabinoid receptor 1. Moderate turnover (~5 days).
     #[serde(default = "default_cb1")]
     pub cb1: ReceptorState,
+    /// Mu-opioid — pain/endorphin system. Moderate turnover (~5 days).
+    #[serde(default = "default_mu_opioid")]
+    pub mu_opioid: ReceptorState,
+    /// NMDA — glutamate learning/LTP. Moderate turnover (~5 days).
+    #[serde(default = "default_nmda")]
+    pub nmda: ReceptorState,
+}
+
+fn default_mu_opioid() -> ReceptorState {
+    ReceptorState::new(1.0, 432_000.0, 0.000_003, 0.000_001)
+}
+
+fn default_nmda() -> ReceptorState {
+    ReceptorState::new(1.0, 432_000.0, 0.000_002, 0.000_001)
 }
 
 fn default_cb1() -> ReceptorState {
@@ -214,6 +238,8 @@ impl Default for ReceptorMap {
             gaba_a: ReceptorState::new(1.0, 259_200.0, 0.000_004, 0.000_002),
             gaba_b: ReceptorState::new(1.0, 432_000.0, 0.000_002, 0.000_001),
             cb1: default_cb1(),
+            mu_opioid: default_mu_opioid(),
+            nmda: default_nmda(),
         }
     }
 }
@@ -234,6 +260,8 @@ impl ReceptorMap {
             ReceptorSubtype::GabaA => &self.gaba_a,
             ReceptorSubtype::GabaB => &self.gaba_b,
             ReceptorSubtype::Cb1 => &self.cb1,
+            ReceptorSubtype::MuOpioid => &self.mu_opioid,
+            ReceptorSubtype::Nmda => &self.nmda,
         }
     }
 
@@ -251,6 +279,8 @@ impl ReceptorMap {
             ReceptorSubtype::GabaA => &mut self.gaba_a,
             ReceptorSubtype::GabaB => &mut self.gaba_b,
             ReceptorSubtype::Cb1 => &mut self.cb1,
+            ReceptorSubtype::MuOpioid => &mut self.mu_opioid,
+            ReceptorSubtype::Nmda => &mut self.nmda,
         }
     }
 
@@ -275,6 +305,8 @@ impl ReceptorMap {
         self.gaba_a.tick_unchecked(occupancies.gaba_a, dt);
         self.gaba_b.tick_unchecked(occupancies.gaba_b, dt);
         self.cb1.tick_unchecked(occupancies.cb1, dt);
+        self.mu_opioid.tick_unchecked(occupancies.mu_opioid, dt);
+        self.nmda.tick_unchecked(occupancies.nmda, dt);
         Ok(())
     }
 }

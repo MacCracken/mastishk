@@ -118,6 +118,82 @@ impl SleepState {
         self.adenosine = self.adenosine.clamp(0.0, 1.0);
         Ok(())
     }
+
+    /// Initiate sleep onset. Transitions from Wake to NREM1.
+    ///
+    /// Only takes effect if currently awake.
+    #[inline]
+    pub fn fall_asleep(&mut self) {
+        if self.stage == SleepStage::Wake {
+            self.stage = SleepStage::Nrem1;
+            self.time_in_stage = 0.0;
+            self.total_sleep = 0.0;
+            self.cycles_completed = 0;
+            tracing::debug!("sleep onset");
+        }
+    }
+
+    /// Wake up. Transitions any sleep stage to Wake.
+    #[inline]
+    pub fn wake_up(&mut self) {
+        if self.stage != SleepStage::Wake {
+            self.stage = SleepStage::Wake;
+            self.time_in_stage = 0.0;
+            tracing::debug!(
+                cycles = self.cycles_completed,
+                total_sleep = self.total_sleep,
+                "woke up"
+            );
+        }
+    }
+
+    /// Advance sleep stage transitions based on time in stage.
+    ///
+    /// Models the ~90-minute ultradian cycle:
+    /// NREM1 → NREM2 → NREM3 → NREM2 → REM → (cycle complete) → NREM2 → ...
+    ///
+    /// Early cycles are NREM3-dominant (longer deep sleep), later cycles are
+    /// REM-dominant (longer REM periods). Does nothing during Wake.
+    #[inline]
+    pub fn tick_stage_transitions(&mut self, dt_hours: f32) {
+        if self.stage == SleepStage::Wake {
+            return;
+        }
+        self.time_in_stage += dt_hours;
+
+        // Stage durations (in hours) — vary by cycle
+        let nrem3_duration = if self.cycles_completed < 2 { 0.5 } else { 0.2 };
+        let rem_duration = if self.cycles_completed < 2 {
+            0.17
+        } else {
+            0.33
+        };
+
+        let transition = match self.stage {
+            SleepStage::Nrem1 if self.time_in_stage > 0.1 => Some(SleepStage::Nrem2),
+            SleepStage::Nrem2 if self.time_in_stage > 0.33 => {
+                // First pass through NREM2 → NREM3; return pass → REM
+                // Use total_sleep to distinguish: early in cycle → NREM3
+                if self.total_sleep < (self.cycles_completed as f32 + 0.5) * 1.5 {
+                    Some(SleepStage::Nrem3)
+                } else {
+                    Some(SleepStage::Rem)
+                }
+            }
+            SleepStage::Nrem3 if self.time_in_stage > nrem3_duration => Some(SleepStage::Nrem2),
+            SleepStage::Rem if self.time_in_stage > rem_duration => {
+                self.cycles_completed += 1;
+                Some(SleepStage::Nrem2) // start new cycle
+            }
+            _ => None,
+        };
+
+        if let Some(next) = transition {
+            tracing::trace!(from = ?self.stage, to = ?next, cycle = self.cycles_completed, "sleep stage transition");
+            self.stage = next;
+            self.time_in_stage = 0.0;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -212,5 +288,57 @@ mod tests {
             s.stage = stage;
             assert!(s.is_asleep());
         }
+    }
+
+    #[test]
+    fn test_fall_asleep_transitions_to_nrem1() {
+        let mut s = SleepState::default();
+        s.fall_asleep();
+        assert_eq!(s.stage, SleepStage::Nrem1);
+    }
+
+    #[test]
+    fn test_wake_up_transitions_to_wake() {
+        let mut s = SleepState {
+            stage: SleepStage::Nrem3,
+            ..Default::default()
+        };
+        s.wake_up();
+        assert_eq!(s.stage, SleepStage::Wake);
+    }
+
+    #[test]
+    fn test_ultradian_cycle_progresses() {
+        let mut s = SleepState::default();
+        s.fall_asleep();
+        // Simulate 2 hours of sleep in 1-minute steps
+        for _ in 0..120 {
+            s.tick_stage_transitions(1.0 / 60.0);
+            // Also tick adenosine to advance total_sleep
+            s.tick_adenosine(1.0 / 60.0).unwrap();
+        }
+        // Should have progressed past NREM1 into deeper stages
+        assert_ne!(s.stage, SleepStage::Nrem1);
+        assert!(s.is_asleep());
+    }
+
+    #[test]
+    fn test_full_night_completes_cycles() {
+        let mut s = SleepState::default();
+        s.fall_asleep();
+        // Simulate 8 hours of sleep in 1-minute steps
+        for _ in 0..480 {
+            s.tick_stage_transitions(1.0 / 60.0);
+            s.tick_adenosine(1.0 / 60.0).unwrap();
+        }
+        // Should have completed at least 3 cycles (~90 min each, 8hr = ~5 cycles)
+        assert!(s.cycles_completed >= 3, "cycles={}", s.cycles_completed);
+    }
+
+    #[test]
+    fn test_no_transitions_during_wake() {
+        let mut s = SleepState::default();
+        s.tick_stage_transitions(1.0);
+        assert_eq!(s.stage, SleepStage::Wake);
     }
 }

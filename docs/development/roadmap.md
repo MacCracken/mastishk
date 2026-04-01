@@ -85,10 +85,10 @@
 - [x] HPA cascade realistic timing — CRH→ACTH 5min, ACTH→cortisol 10min, feedback 15min
 - [x] Bidirectional amygdala↔PFC coupling — stress impairs executive function (Arnsten 2009)
 - [x] SSRI→SERT transporter fix — SSRIs correctly target transporter, not receptors
-- [ ] Mu-opioid + NMDA receptor subtypes — pain/endorphin system + glutamate learning
-- [ ] Automated sleep stage transitions — 90-min ultradian cycle, NREM-dominant early / REM-dominant late
-- [ ] Stress sensitization / kindling — allostatic load feeds back to lower HPA activation threshold
-- [ ] Sex hormone modulation — estradiol→serotonin synthesis, testosterone→amygdala/PFC reactivity
+- [x] Mu-opioid + NMDA receptor subtypes — pain/endorphin system + glutamate learning
+- [x] Automated sleep stage transitions — 90-min ultradian cycle with fall_asleep/wake_up/tick_stage_transitions
+- [x] Stress sensitization / kindling — allostatic load → crh_sensitivity (Post 1992)
+- [x] Sex hormone modulation — SexHormoneState: estradiol→serotonin synthesis, testosterone→amygdala reactivity
 
 ### 0.7.0 — Advanced Neural Dynamics
 

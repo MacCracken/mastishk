@@ -21,6 +21,11 @@ pub struct HpaState {
     pub allostatic_load: f32,
     /// Negative feedback strength (higher = faster cortisol suppresses CRH).
     pub feedback_gain: f32,
+    /// Stress sensitization / kindling (0.0–1.0). Chronic stress lowers the
+    /// threshold for future HPA activation (Post 1992 kindling model).
+    /// Driven by allostatic_load accumulation.
+    #[serde(default)]
+    pub sensitization: f32,
 }
 
 impl Default for HpaState {
@@ -32,16 +37,21 @@ impl Default for HpaState {
             cortisol_baseline: 0.2,
             allostatic_load: 0.0,
             feedback_gain: 0.5,
+            sensitization: 0.0,
         }
     }
 }
 
 impl HpaState {
     /// Apply a stressor (0.0–1.0 intensity). Triggers CRH release.
+    ///
+    /// Sensitization amplifies the effective intensity: repeated stress makes
+    /// the HPA axis more reactive to future stressors (kindling effect).
     #[inline]
     pub fn stress(&mut self, intensity: f32) {
-        self.crh = (self.crh + intensity * 0.3).min(1.0);
-        tracing::debug!(intensity, crh = self.crh, "stressor applied");
+        let effective = intensity * (1.0 + self.sensitization * 0.5);
+        self.crh = (self.crh + effective * 0.3).min(1.0);
+        tracing::debug!(intensity, effective, crh = self.crh, "stressor applied");
     }
 
     /// Tick the cascade: CRH drives ACTH, ACTH drives cortisol,
@@ -86,6 +96,14 @@ impl HpaState {
         if self.cortisol < self.cortisol_baseline + 0.05 {
             self.allostatic_load = (self.allostatic_load - 0.002 * dt).max(0.0);
         }
+
+        // Stress sensitization driven by allostatic load (Post 1992 kindling)
+        // High load → increased sensitization, low load → slow recovery
+        let sens_target = (self.allostatic_load / 3.0).min(1.0);
+        let sens_alpha = 1.0 - (-0.0001 * dt).exp(); // very slow (days timescale)
+        self.sensitization += (sens_target - self.sensitization) * sens_alpha;
+        self.sensitization = self.sensitization.clamp(0.0, 1.0);
+
         Ok(())
     }
 

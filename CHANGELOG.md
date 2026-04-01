@@ -9,9 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (Domain Accuracy — external review)
 - **neurotransmitter** — Histamine transmitter: primary wakefulness signal (tuberomammillary nucleus), high during wake, near-zero during all sleep stages (Saper 2005 flip-flop model). Integrated into sleep-NT coupling targets
-- **neurotransmitter** — Endocannabinoid system (anandamide/2-AG): stress buffer via retrograde CB1 signaling, dampens glutamate/GABA release, modulates HPA recovery and pain. CB1 receptor added to ReceptorMap
-- **regions** — VTA/Nucleus Accumbens reward circuit (`RewardCircuitState`): incentive salience/wanting (Berridge), craving (wanting minus satiation), reward sensitization, distinct from dorsal striatum Go/NoGo. `reward_cue()`, `receive_reward()`, `wanting()`, `is_craving()`
-- **chronobiology** — Asymmetric cortisol waveform replacing symmetric cosine: sharp CAR Gaussian rise 6-8AM + slow exponential decay through day, nadir ~2AM
+- **neurotransmitter** — Endocannabinoid system (anandamide/2-AG): stress buffer via retrograde CB1 signaling, dampens glutamate/GABA release, modulates HPA recovery and pain
+- **receptor** — CB1, mu-opioid, and NMDA receptor subtypes added to ReceptorSubtype/ReceptorMap with per-receptor turnover parameters
+- **regions** — VTA/Nucleus Accumbens reward circuit (`RewardCircuitState`): incentive salience/wanting (Berridge), craving, satiation, sensitization, distinct from dorsal striatum Go/NoGo
+- **chronobiology** — Asymmetric cortisol waveform: sharp CAR Gaussian rise 6-8AM + slow exponential decay, nadir ~2AM
+- **sleep** — Automated sleep stage transitions: `fall_asleep()`, `wake_up()`, `tick_stage_transitions()` with 90-min ultradian cycle (NREM1→NREM2→NREM3→NREM2→REM). NREM3-dominant early, REM-dominant late
+- **hpa** — Stress sensitization / kindling: `sensitization` field driven by allostatic_load (Post 1992 model). Amplifies effective stress intensity, creating progressive HPA reactivity under chronic stress
+- **brain** — Sex hormone modulation: `SexHormoneState` with estradiol (→serotonin synthesis) and testosterone (→amygdala reactivity). Integrated into brain tick
 
 ### Fixed (Domain Accuracy — external review)
 - **pharmacology** — SSRIs now correctly target SERT transporter (not 5-HT1A/2A receptors). Added `TransporterType` enum (Sert, Dat, Net), `TransporterBinding` struct, and `transporter_bindings` field on `DrugProfile`. Methylphenidate similarly moved to DAT/NET transporters. Amphetamine retains D1/D2 agonist bindings (vesicular release) plus DAT/NET transporter bindings

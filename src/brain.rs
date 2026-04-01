@@ -73,6 +73,32 @@ pub struct BrainState {
     /// VTA/Nucleus Accumbens reward circuit (incentive salience, wanting, craving).
     #[serde(default)]
     pub reward_circuit: RewardCircuitState,
+    /// Sex hormone levels (slow-changing, modulate NT synthesis and region reactivity).
+    #[serde(default)]
+    pub hormones: SexHormoneState,
+}
+
+/// Sex hormone levels — slow-changing modulators of neurotransmitter dynamics
+/// and brain region reactivity.
+///
+/// Estradiol enhances serotonin synthesis and reduces MAO-B activity (mood stabilization).
+/// Testosterone modulates amygdala reactivity and risk-taking via androgen receptors.
+/// Both are trait-like (change over weeks/months), set by consumer per character profile.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SexHormoneState {
+    /// Estradiol level (0.0–1.0). Higher → enhanced serotonin synthesis, mood stability.
+    pub estradiol: f32,
+    /// Testosterone level (0.0–1.0). Higher → increased amygdala reactivity, risk-taking.
+    pub testosterone: f32,
+}
+
+impl Default for SexHormoneState {
+    fn default() -> Self {
+        Self {
+            estradiol: 0.5,
+            testosterone: 0.5,
+        }
+    }
 }
 
 impl BrainState {
@@ -130,6 +156,23 @@ impl BrainState {
 
         // 5. Neurotransmitter tick
         self.neurotransmitter.tick_all(dt)?;
+
+        // 5.5 Sex hormone modulation (slow-acting, modulates NT synthesis + region reactivity)
+        {
+            let alpha = 1.0 - (-0.01 * dt).exp();
+            // Estradiol → serotonin synthesis boost (mood stabilization)
+            let estradiol_boost = (self.hormones.estradiol - 0.5) * 0.02;
+            self.neurotransmitter.serotonin.synthesis_rate += estradiol_boost * alpha;
+            self.neurotransmitter.serotonin.synthesis_rate = self
+                .neurotransmitter
+                .serotonin
+                .synthesis_rate
+                .clamp(0.005, 0.1);
+            // Testosterone → amygdala activation boost (risk-taking, reactivity)
+            let testosterone_boost = (self.hormones.testosterone - 0.5) * 0.05;
+            self.amygdala.activation =
+                (self.amygdala.activation + testosterone_boost * alpha).clamp(0.0, 1.0);
+        }
 
         // 6. NT → Amygdala coupling (sensory region first)
         apply_nt_amygdala_coupling(
@@ -211,6 +254,7 @@ impl BrainState {
 
         // 20. Sleep adenosine dynamics
         self.sleep.tick_adenosine(dt_hours)?;
+        self.sleep.tick_stage_transitions(dt_hours);
 
         Ok(())
     }
