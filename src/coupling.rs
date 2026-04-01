@@ -126,18 +126,18 @@ impl Default for CouplingParams {
 
 /// Target neurotransmitter baselines for a given sleep stage.
 ///
-/// Returns `(acetylcholine, serotonin, norepinephrine, histamine)` target levels.
+/// Returns `(acetylcholine, serotonin, norepinephrine, histamine, orexin)` target levels.
 /// ACh peaks during REM; monoamines (5-HT, NE) suppressed in REM/NREM3;
-/// histamine high during wake, near-zero during all sleep stages (Saper 2005).
+/// histamine and orexin high during wake, near-zero during all sleep stages (Saper 2005).
 #[inline]
 #[must_use]
-pub fn sleep_neurotransmitter_targets(stage: SleepStage) -> (f32, f32, f32, f32) {
-    //                                    ACh   5-HT   NE    HA
+pub fn sleep_neurotransmitter_targets(stage: SleepStage) -> (f32, f32, f32, f32, f32) {
+    //                                    ACh   5-HT   NE    HA    OX
     match stage {
-        SleepStage::Wake => (0.4, 0.8, 0.8, 0.7),
-        SleepStage::Nrem1 | SleepStage::Nrem2 => (0.2, 0.3, 0.2, 0.1),
-        SleepStage::Nrem3 => (0.1, 0.2, 0.1, 0.02),
-        SleepStage::Rem => (0.9, 0.05, 0.05, 0.02),
+        SleepStage::Wake => (0.4, 0.8, 0.8, 0.7, 0.7),
+        SleepStage::Nrem1 | SleepStage::Nrem2 => (0.2, 0.3, 0.2, 0.1, 0.05),
+        SleepStage::Nrem3 => (0.1, 0.2, 0.1, 0.02, 0.02),
+        SleepStage::Rem => (0.9, 0.05, 0.05, 0.02, 0.02),
     }
 }
 
@@ -156,7 +156,7 @@ pub fn apply_sleep_neurotransmitter_coupling(
     dt: f32,
 ) -> Result<(), MastishkError> {
     validate_dt(dt)?;
-    let (ach_target, serotonin_target, ne_target, ha_target) =
+    let (ach_target, serotonin_target, ne_target, ha_target, ox_target) =
         sleep_neurotransmitter_targets(stage);
     let alpha = 1.0 - (-smoothing_rate * dt).exp();
 
@@ -164,6 +164,7 @@ pub fn apply_sleep_neurotransmitter_coupling(
     profile.serotonin.baseline += (serotonin_target - profile.serotonin.baseline) * alpha;
     profile.norepinephrine.baseline += (ne_target - profile.norepinephrine.baseline) * alpha;
     profile.histamine.baseline += (ha_target - profile.histamine.baseline) * alpha;
+    profile.orexin.baseline += (ox_target - profile.orexin.baseline) * alpha;
 
     tracing::trace!(
         ?stage,
@@ -563,29 +564,32 @@ mod tests {
 
     #[test]
     fn test_sleep_nt_targets_wake() {
-        let (ach, serotonin, ne, ha) = sleep_neurotransmitter_targets(SleepStage::Wake);
+        let (ach, serotonin, ne, ha, ox) = sleep_neurotransmitter_targets(SleepStage::Wake);
         assert!((ach - 0.4).abs() < f32::EPSILON);
         assert!((serotonin - 0.8).abs() < f32::EPSILON);
         assert!((ne - 0.8).abs() < f32::EPSILON);
         assert!(ha > 0.5); // histamine high during wake
+        assert!(ox > 0.5); // orexin high during wake
     }
 
     #[test]
     fn test_sleep_nt_targets_rem() {
-        let (ach, serotonin, ne, ha) = sleep_neurotransmitter_targets(SleepStage::Rem);
+        let (ach, serotonin, ne, ha, ox) = sleep_neurotransmitter_targets(SleepStage::Rem);
         assert!(ach > 0.8);
         assert!(serotonin < 0.1);
         assert!(ne < 0.1);
         assert!(ha < 0.1); // histamine suppressed during sleep
+        assert!(ox < 0.1); // orexin suppressed during sleep
     }
 
     #[test]
     fn test_sleep_nt_targets_nrem3() {
-        let (ach, serotonin, ne, ha) = sleep_neurotransmitter_targets(SleepStage::Nrem3);
+        let (ach, serotonin, ne, ha, ox) = sleep_neurotransmitter_targets(SleepStage::Nrem3);
         assert!(ach < 0.2);
         assert!(serotonin < 0.3);
         assert!(ne < 0.2);
-        assert!(ha < 0.1); // histamine suppressed during sleep
+        assert!(ha < 0.1);
+        assert!(ox < 0.1);
     }
 
     #[test]

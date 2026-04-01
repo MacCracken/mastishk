@@ -25,6 +25,14 @@ pub struct CircadianState {
     /// Default 12.0 (equinox). Short photoperiod (winter) → SAD-like effects.
     #[serde(default = "default_photoperiod")]
     pub photoperiod_hours: f32,
+    /// Phase at which the entity last woke up (hours). CAR peaks ~0.5h after this.
+    /// Updated by consumers calling `signal_wake()`. Defaults to 7.0 (7 AM).
+    #[serde(default = "default_wake_phase")]
+    pub last_wake_phase: f32,
+}
+
+fn default_wake_phase() -> f32 {
+    7.0
 }
 
 fn default_photoperiod() -> f32 {
@@ -40,6 +48,7 @@ impl Default for CircadianState {
             temperature_deviation: 0.0,
             light_exposure: 500.0,
             photoperiod_hours: default_photoperiod(),
+            last_wake_phase: default_wake_phase(),
         };
         state.update_rhythms();
         state
@@ -62,6 +71,13 @@ impl CircadianState {
         self.phase_hours = (self.phase_hours + dt_hours) % 24.0;
         self.update_rhythms();
         Ok(())
+    }
+
+    /// Signal that the entity has just woken up. Records current phase for CAR timing.
+    #[inline]
+    pub fn signal_wake(&mut self) {
+        self.last_wake_phase = self.phase_hours;
+        tracing::debug!(wake_phase = self.last_wake_phase, "wake signaled for CAR");
     }
 
     /// Set photoperiod (daylight hours). Clamps to 6.0–18.0.
@@ -101,8 +117,8 @@ impl CircadianState {
         };
         self.melatonin = (melatonin_base * light_suppression).clamp(0.0, 1.0);
 
-        // Cortisol: peaks at ~8 AM (CAR), nadir at midnight
-        self.cortisol_circadian = cortisol_curve(h);
+        // Cortisol CAR: peaks ~0.5h after wake, not at fixed clock time
+        self.cortisol_circadian = cortisol_curve(h, self.last_wake_phase);
 
         // Core body temperature: nadir ~4:30 AM, peak ~7 PM
         self.temperature_deviation = temperature_curve(h);
@@ -125,26 +141,33 @@ fn melatonin_curve(hour: f32) -> f32 {
     (phase.cos() * 0.5 + 0.5).clamp(0.0, 1.0)
 }
 
-/// Cortisol CAR curve: asymmetric waveform with sharp morning rise and slow decay.
+/// Cortisol CAR curve: asymmetric waveform peaking ~0.5h after wake.
 ///
-/// Models the cortisol awakening response (CAR): sharp rise 6-8 AM peaking at ~8 AM,
-/// then slow exponential decay through afternoon/evening to nadir around 2 AM.
-/// More biologically accurate than a symmetric cosine.
+/// The cortisol awakening response (CAR) is coupled to wake time, not fixed
+/// clock time. This allows accurate modeling for shift workers and variable
+/// sleep schedules. Sharp Gaussian peak post-wake, slow exponential decay.
 #[inline]
 #[must_use]
-fn cortisol_curve(hour: f32) -> f32 {
-    // Nadir baseline (~2 AM)
+fn cortisol_curve(hour: f32, wake_phase: f32) -> f32 {
+    let car_peak_time = wake_phase + 0.5; // CAR peaks ~30 min after waking
     let nadir = 0.05;
-    // Peak at ~8 AM with sharp Gaussian rise (sigma = 1.5 hours)
-    let car_peak = (-((hour - 8.0).powi(2)) / (2.0 * 1.5 * 1.5)).exp() * 0.65;
-    // Slow exponential decay from morning through day (tau = 8 hours from peak)
-    let decay = if hour > 8.0 {
-        0.4 * (-(hour - 8.0) / 8.0).exp()
-    } else if hour < 4.0 {
-        // Late night: still in nadir
-        0.0
+    // Gaussian peak centered on CAR time (sigma = 1.5 hours)
+    let dist = {
+        let d = hour - car_peak_time;
+        // Handle wrap-around at 24h boundary
+        if d > 12.0 {
+            d - 24.0
+        } else if d < -12.0 {
+            d + 24.0
+        } else {
+            d
+        }
+    };
+    let car_peak = (-(dist.powi(2)) / (2.0 * 1.5 * 1.5)).exp() * 0.65;
+    // Slow exponential decay after peak (tau = 8 hours)
+    let decay = if dist > 0.0 && dist < 16.0 {
+        0.4 * (-dist / 8.0).exp()
     } else {
-        // 4-8 AM: rising phase captured by Gaussian
         0.0
     };
     (nadir + car_peak + decay).clamp(0.0, 0.7)
@@ -171,8 +194,8 @@ mod tests {
 
     #[test]
     fn test_cortisol_peaks_morning() {
-        let morning = cortisol_curve(8.0);
-        let midnight = cortisol_curve(0.0);
+        let morning = cortisol_curve(8.0, 7.0); // wake at 7, check at 8 (peak)
+        let midnight = cortisol_curve(0.0, 7.0);
         assert!(morning > midnight);
     }
 

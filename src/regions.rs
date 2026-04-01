@@ -565,6 +565,242 @@ impl RewardCircuitState {
     }
 }
 
+// ── Locus Coeruleus ────────────────────────────────────────────────
+
+/// Locus coeruleus — NE source nucleus with tonic/phasic modes.
+///
+/// Tonic mode (high baseline firing) → broad arousal, exploration.
+/// Phasic mode (burst firing to salient stimuli) → focused attention, exploitation.
+/// (Aston-Jones & Cohen 2005 adaptive gain theory).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocusCoeruleusState {
+    /// Tonic firing rate (0.0–1.0). High = broad arousal/exploration.
+    pub tonic_rate: f32,
+    /// Phasic burst magnitude (0.0–1.0). Transient, decays rapidly.
+    pub phasic_burst: f32,
+    /// Exploration-exploitation balance (0.0 = exploit/focus, 1.0 = explore/scan).
+    pub explore_exploit: f32,
+}
+
+impl Default for LocusCoeruleusState {
+    fn default() -> Self {
+        Self {
+            tonic_rate: 0.3,
+            phasic_burst: 0.0,
+            explore_exploit: 0.5,
+        }
+    }
+}
+
+impl LocusCoeruleusState {
+    /// Tick LC dynamics. Phasic burst decays rapidly; tonic decays to resting.
+    #[inline]
+    pub fn tick(&mut self, dt: f32) -> Result<(), MastishkError> {
+        validate_dt(dt)?;
+        self.phasic_burst *= (-dt / 0.3).exp(); // ~300ms decay
+        self.tonic_rate += (0.3 - self.tonic_rate) * (1.0 - (-0.05 * dt).exp());
+        self.explore_exploit = (self.tonic_rate * 1.5 - self.phasic_burst).clamp(0.0, 1.0);
+        tracing::trace!(
+            tonic = self.tonic_rate,
+            phasic = self.phasic_burst,
+            "LC tick"
+        );
+        Ok(())
+    }
+
+    /// Fire a phasic burst (salient stimulus detected).
+    #[inline]
+    pub fn fire_phasic(&mut self, magnitude: f32) {
+        self.phasic_burst = (self.phasic_burst + magnitude * 0.5).min(1.0);
+        tracing::debug!(magnitude, "LC phasic burst");
+    }
+
+    /// Shift toward tonic/exploration mode.
+    #[inline]
+    pub fn shift_tonic(&mut self, amount: f32) {
+        self.tonic_rate = (self.tonic_rate + amount * 0.2).min(1.0);
+    }
+
+    /// NE output combining tonic baseline + phasic burst.
+    #[inline]
+    #[must_use]
+    pub fn ne_output(&self) -> f32 {
+        (self.tonic_rate + self.phasic_burst * 0.5).clamp(0.0, 1.0)
+    }
+}
+
+// ── Raphe Nuclei ───────────────────────────────────────────────────
+
+/// Raphe nuclei — serotonin source. Firing rate modulates 5-HT synthesis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RapheState {
+    /// Firing rate (0.0–1.0). Drives serotonin synthesis.
+    pub firing_rate: f32,
+    /// Autoreceptor inhibition (0.0–1.0). High 5-HT feeds back to suppress firing.
+    pub autoreceptor_inhibition: f32,
+}
+
+impl Default for RapheState {
+    fn default() -> Self {
+        Self {
+            firing_rate: 0.5,
+            autoreceptor_inhibition: 0.0,
+        }
+    }
+}
+
+impl RapheState {
+    /// Tick raphe dynamics. Firing rate modulated by autoreceptor feedback.
+    #[inline]
+    pub fn tick(&mut self, serotonin_level: f32, dt: f32) -> Result<(), MastishkError> {
+        validate_dt(dt)?;
+        let alpha = 1.0 - (-0.05 * dt).exp();
+        // Autoreceptor: high 5-HT suppresses raphe firing (negative feedback)
+        self.autoreceptor_inhibition = serotonin_level * 0.5;
+        let target = (0.6 - self.autoreceptor_inhibition).clamp(0.1, 0.8);
+        self.firing_rate += (target - self.firing_rate) * alpha;
+        tracing::trace!(rate = self.firing_rate, "raphe tick");
+        Ok(())
+    }
+
+    /// Serotonin synthesis rate modifier from raphe firing (0.5–1.5).
+    #[inline]
+    #[must_use]
+    pub fn serotonin_synthesis_modifier(&self) -> f32 {
+        0.5 + self.firing_rate
+    }
+}
+
+// ── Anterior Cingulate Cortex ───────────────────────────────────────
+
+/// Anterior cingulate cortex — conflict monitoring, error detection, effort allocation.
+///
+/// The ACC bridges detecting that cognitive control is needed and recruiting PFC.
+/// High conflict → ACC signals PFC to engage executive control.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccState {
+    /// Conflict signal (0.0–1.0). Detected incompatibility between competing responses.
+    pub conflict_signal: f32,
+    /// Error detection (0.0–1.0). Accumulated error signals.
+    pub error_detection: f32,
+    /// Effort allocation to PFC (0.0–1.0). How much control is being requested.
+    pub effort_allocation: f32,
+}
+
+impl Default for AccState {
+    fn default() -> Self {
+        Self {
+            conflict_signal: 0.1,
+            error_detection: 0.0,
+            effort_allocation: 0.3,
+        }
+    }
+}
+
+impl AccState {
+    /// Tick ACC dynamics.
+    #[inline]
+    pub fn tick(&mut self, dt: f32) -> Result<(), MastishkError> {
+        validate_dt(dt)?;
+        let alpha = 1.0 - (-0.15 * dt).exp();
+        self.conflict_signal += (0.1 - self.conflict_signal) * alpha;
+        self.error_detection += (0.0 - self.error_detection) * (1.0 - (-0.2 * dt).exp());
+        let effort_target =
+            (self.conflict_signal * 0.6 + self.error_detection * 0.4).clamp(0.0, 1.0);
+        self.effort_allocation += (effort_target - self.effort_allocation) * alpha;
+        tracing::trace!(
+            conflict = self.conflict_signal,
+            effort = self.effort_allocation,
+            "ACC tick"
+        );
+        Ok(())
+    }
+
+    /// Signal a response conflict (e.g., Stroop interference).
+    #[inline]
+    pub fn signal_conflict(&mut self, magnitude: f32) {
+        self.conflict_signal = (self.conflict_signal + magnitude * 0.4).min(1.0);
+        tracing::debug!(magnitude, "ACC conflict signaled");
+    }
+
+    /// Signal an error (wrong response detected).
+    #[inline]
+    pub fn signal_error(&mut self, magnitude: f32) {
+        self.error_detection = (self.error_detection + magnitude * 0.5).min(1.0);
+    }
+
+    /// Control demand output — how strongly PFC should engage.
+    #[inline]
+    #[must_use]
+    pub fn control_demand(&self) -> f32 {
+        self.effort_allocation
+    }
+}
+
+// ── Insula ─────────────────────────────────────────────────────────
+
+/// Insula — interoceptive cortex: body-state awareness, disgust, empathy, pain.
+///
+/// Integrates autonomic, gut-brain, and inflammation signals into a unified
+/// body-state representation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InsulaState {
+    /// Body-state awareness (0.0–1.0). Integrated interoceptive representation.
+    pub body_awareness: f32,
+    /// Disgust signal (0.0–1.0).
+    pub disgust: f32,
+    /// Empathic resonance (0.0–1.0). Mirroring others' body states.
+    pub empathy: f32,
+    /// Pain representation (0.0–1.0). Integrated pain signal.
+    pub pain: f32,
+}
+
+impl Default for InsulaState {
+    fn default() -> Self {
+        Self {
+            body_awareness: 0.5,
+            disgust: 0.0,
+            empathy: 0.3,
+            pain: 0.0,
+        }
+    }
+}
+
+impl InsulaState {
+    /// Tick insula dynamics.
+    #[inline]
+    pub fn tick(&mut self, dt: f32) -> Result<(), MastishkError> {
+        validate_dt(dt)?;
+        let alpha = 1.0 - (-0.1 * dt).exp();
+        self.disgust += (0.0 - self.disgust) * alpha;
+        self.pain += (0.0 - self.pain) * (1.0 - (-0.08 * dt).exp());
+        self.empathy += (0.3 - self.empathy) * (1.0 - (-0.03 * dt).exp());
+        self.body_awareness += (0.5 - self.body_awareness) * (1.0 - (-0.05 * dt).exp());
+        tracing::trace!(
+            awareness = self.body_awareness,
+            pain = self.pain,
+            "insula tick"
+        );
+        Ok(())
+    }
+
+    /// Update body awareness from autonomic + inflammation state.
+    #[inline]
+    pub fn update_from_body(&mut self, autonomic_sympathetic: f32, sickness: f32, dt: f32) {
+        let alpha = 1.0 - (-0.1 * dt).exp();
+        self.body_awareness = (self.body_awareness
+            + (autonomic_sympathetic * 0.3 + sickness * 0.2) * alpha)
+            .clamp(0.0, 1.0);
+        self.pain = (self.pain + sickness * 0.15 * alpha).clamp(0.0, 1.0);
+    }
+
+    /// Signal disgust (stimulus-driven).
+    #[inline]
+    pub fn signal_disgust(&mut self, intensity: f32) {
+        self.disgust = (self.disgust + intensity * 0.4).min(1.0);
+    }
+}
+
 // ── Tests ──────────────────────────────────────────────────────────
 
 #[cfg(test)]

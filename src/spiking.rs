@@ -167,7 +167,8 @@ impl LifNeuron {
     /// Advance by `dt_ms` milliseconds. Returns `true` on spike.
     #[inline]
     pub fn tick(&mut self, input: f32, dt_ms: f32) -> bool {
-        let dv = (-(self.v - self.v_rest) + self.r_m * input) / self.tau_m;
+        let tau = self.tau_m.max(f32::EPSILON);
+        let dv = (-(self.v - self.v_rest) + self.r_m * input) / tau;
         self.v += dv * dt_ms;
         if self.v >= self.v_thresh {
             self.v = self.v_reset;

@@ -22,8 +22,8 @@ use crate::hpa::HpaState;
 use crate::neurotransmitter::NeurotransmitterProfile;
 use crate::pharmacology::{DrugProfile, PharmacologyState};
 use crate::regions::{
-    AmygdalaState, BasalGangliaState, CerebellumState, HippocampusState, PfcState,
-    RewardCircuitState,
+    AccState, AmygdalaState, BasalGangliaState, CerebellumState, HippocampusState, InsulaState,
+    LocusCoeruleusState, PfcState, RapheState, RewardCircuitState,
 };
 use crate::sleep::SleepState;
 
@@ -73,6 +73,24 @@ pub struct BrainState {
     /// VTA/Nucleus Accumbens reward circuit (incentive salience, wanting, craving).
     #[serde(default)]
     pub reward_circuit: RewardCircuitState,
+    /// TD learning (Schultz 1997 — dopamine phasic RPE updates value estimates).
+    #[serde(default)]
+    pub td_learner: TdLearner,
+    /// Opponent process (Solomon & Corbit 1974 — hedonic adaptation, tolerance).
+    #[serde(default)]
+    pub opponent_process: OpponentProcess,
+    /// Anterior cingulate cortex (conflict monitoring, error detection, PFC recruitment).
+    #[serde(default)]
+    pub acc: AccState,
+    /// Insula (interoceptive cortex: body awareness, disgust, empathy, pain).
+    #[serde(default)]
+    pub insula: InsulaState,
+    /// Locus coeruleus — NE source with tonic/phasic modes.
+    #[serde(default)]
+    pub locus_coeruleus: LocusCoeruleusState,
+    /// Raphe nuclei — serotonin source, autoreceptor feedback.
+    #[serde(default)]
+    pub raphe: RapheState,
     /// Sex hormone levels (slow-changing, modulate NT synthesis and region reactivity).
     #[serde(default)]
     pub hormones: SexHormoneState,
@@ -211,6 +229,103 @@ impl AgeProfile {
     }
 }
 
+/// Temporal Difference (TD) learner — uses dopamine phasic RPE to update value estimates.
+///
+/// Implements Schultz (1997): dopamine phasic bursts carry reward prediction error,
+/// which updates cached value estimates for states/actions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TdLearner {
+    /// Current state value estimate (0.0–1.0).
+    pub value_estimate: f32,
+    /// Learning rate (0.0–1.0). How fast values update from RPE.
+    pub learning_rate: f32,
+    /// Discount factor (0.0–1.0). Weight of future rewards.
+    pub discount: f32,
+}
+
+impl Default for TdLearner {
+    fn default() -> Self {
+        Self {
+            value_estimate: 0.3,
+            learning_rate: 0.1,
+            discount: 0.95,
+        }
+    }
+}
+
+impl TdLearner {
+    /// Update value estimate from dopamine phasic RPE signal.
+    #[inline]
+    pub fn update(&mut self, dopamine_phasic: f32) {
+        self.value_estimate += self.learning_rate * dopamine_phasic;
+        self.value_estimate = self.value_estimate.clamp(0.0, 1.0);
+        tracing::trace!(
+            value = self.value_estimate,
+            rpe = dopamine_phasic,
+            "TD update"
+        );
+    }
+
+    /// Compute TD error from actual reward vs expected.
+    #[inline]
+    #[must_use]
+    pub fn td_error(&self, reward: f32, next_value: f32) -> f32 {
+        (reward + self.discount * next_value - self.value_estimate).clamp(-1.0, 1.0)
+    }
+}
+
+/// Opponent process dynamics for hedonic adaptation (Solomon & Corbit 1974).
+///
+/// Initial pleasure (a-process) triggers opposing b-process (dysphoria).
+/// With repeated exposure, b-process strengthens → tolerance + withdrawal.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpponentProcess {
+    /// A-process (pleasure/hedonic response, 0.0–1.0). Fast onset, fast decay.
+    pub a_process: f32,
+    /// B-process (opponent/dysphoria, 0.0–1.0). Slow onset, slow decay. Grows with repetition.
+    pub b_process: f32,
+    /// B-process strength (0.0–1.0). Increases with repeated activation (tolerance/addiction).
+    pub b_strength: f32,
+}
+
+impl Default for OpponentProcess {
+    fn default() -> Self {
+        Self {
+            a_process: 0.0,
+            b_process: 0.0,
+            b_strength: 0.1,
+        }
+    }
+}
+
+impl OpponentProcess {
+    /// Tick opponent process dynamics.
+    #[inline]
+    pub fn tick(&mut self, dt: f32) {
+        // A-process decays fast
+        self.a_process *= (-dt / 0.5).exp(); // ~500ms half-life
+        // B-process decays slowly
+        self.b_process *= (-dt / 5.0).exp(); // ~5s half-life
+    }
+
+    /// Trigger a hedonic event (reward/pleasure).
+    #[inline]
+    pub fn trigger(&mut self, magnitude: f32) {
+        self.a_process = (self.a_process + magnitude).min(1.0);
+        // B-process kicks in proportional to strength
+        self.b_process = (self.b_process + magnitude * self.b_strength).min(1.0);
+        // Repeated activation strengthens b-process (tolerance)
+        self.b_strength = (self.b_strength + magnitude * 0.01).min(1.0);
+    }
+
+    /// Net hedonic value: a-process minus b-process.
+    #[inline]
+    #[must_use]
+    pub fn net_hedonic(&self) -> f32 {
+        (self.a_process - self.b_process).clamp(-1.0, 1.0)
+    }
+}
+
 impl BrainState {
     /// Advance all subsystems by `dt` seconds, applying cross-module couplings.
     ///
@@ -252,6 +367,22 @@ impl BrainState {
 
         // 4. Pharmacology (drug PK, receptor desensitization, NT modification)
         self.pharmacology.tick(dt, &mut self.neurotransmitter)?;
+
+        // 4.5 Source nuclei: LC drives NE, raphe drives 5-HT synthesis
+        self.locus_coeruleus.tick(dt)?;
+        self.neurotransmitter.norepinephrine.baseline =
+            self.locus_coeruleus.ne_output().clamp(0.1, 0.9);
+        self.raphe.tick(self.neurotransmitter.serotonin.level, dt)?;
+        {
+            let raphe_mod = self.raphe.serotonin_synthesis_modifier();
+            let alpha = 1.0 - (-0.02 * dt).exp();
+            self.neurotransmitter.serotonin.synthesis_rate *= 1.0 + (raphe_mod - 1.0) * alpha;
+            self.neurotransmitter.serotonin.synthesis_rate = self
+                .neurotransmitter
+                .serotonin
+                .synthesis_rate
+                .clamp(0.005, 0.1);
+        }
 
         // 5. Neurotransmitter tick
         self.neurotransmitter.tick_all(dt)?;
@@ -388,6 +519,21 @@ impl BrainState {
         self.basal_ganglia.tick(dt)?;
         self.cerebellum.tick(dt)?;
         self.reward_circuit.tick(dt)?;
+
+        // TD learning: dopamine phasic RPE updates value estimates
+        self.td_learner
+            .update(self.neurotransmitter.dopamine_phasic);
+        // Opponent process: hedonic adaptation dynamics
+        self.opponent_process.tick(dt);
+
+        self.acc.tick(dt)?;
+        // Insula integrates body signals
+        self.insula.update_from_body(
+            self.autonomic.sympathetic,
+            self.inflammation.sickness_behavior,
+            dt,
+        );
+        self.insula.tick(dt)?;
 
         // 18.5 Autonomic coupling (driven by NE, cortisol, amygdala, vagal tone)
         {

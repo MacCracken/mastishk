@@ -7,96 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.7.0] - 2026-03-31
+## [1.0.0] - 2026-03-31
 
-### Added
-- **spiking** — Full-fidelity spiking neural network models: `IzhikevichNeuron` (2003 paper, 4 presets: regular spiking, fast spiking, chattering, intrinsically bursting), `LifNeuron` (leaky integrate-and-fire), `SpikingNeuron` enum, `SpikingNetwork` with synaptic propagation + delay, `StdpRule` (spike-timing-dependent plasticity), `BcmRule` (BCM sliding threshold). Standalone ms-timescale module
-- **circuit** — `apply_hebbian(learning_rate)` for rate-model synaptic plasticity
-- **inflammation** — `InflammationState`: microglial activation, pro-inflammatory cytokines (simplified IL-1β/IL-6/TNF-α), neuroinflammation, sickness behavior, tryptophan depletion (IDO pathway → reduced serotonin synthesis)
-- **gut_brain** — `GutBrainState`: enteric serotonin (95% of body 5-HT), vagal tone, microbiome diversity, interoceptive gut signal. `central_serotonin_modifier()`, `vagal_stress_buffer()`
-- **autonomic** — `AutonomicState`: sympathetic/parasympathetic reciprocal inhibition, HRV proxy. Driven by NE, cortisol, amygdala threat, vagal tone
-- **eeg** — `EegState`: delta/theta/alpha/beta/gamma band powers derived from brain state (sleep stage, PFC focus, meditation, amygdala activation). `EegBand` enum, `dominant_band()`, `tick_toward()` smooth transitions
-- **chronobiology** — `photoperiod_hours` field, `serotonin_photoperiod_modifier()` (0.7–1.3, Lambert 2002). Short winter days → SAD-like serotonin reduction
-- **brain** — `AgeProfile` with `pfc_maturation()` (sigmoid ~25), `dopamine_capacity()` (-10%/decade after 40), `deep_sleep_capacity()`. `InteroceptiveState` (Seth 2013 predictive processing: body prediction, prediction error → anxiety). 6 new `#[serde(default)]` fields. Tick expanded to ~30 steps with inflammation/gut-brain/autonomic/interoception/EEG/photoperiod/age integration
-- **bridge** — 7 new bridge functions: inflammation sickness, sympathetic/parasympathetic activation, HRV, interoceptive anxiety, EEG dominant band, seasonal modifier. `BrainMoodEffect` extended with 6 new fields
+### Core Neuroscience
+- **neurotransmitter** — 12 transmitters: serotonin, dopamine (tonic + phasic RPE), norepinephrine, GABA, glutamate, oxytocin, endorphins, acetylcholine, BDNF, histamine, endocannabinoid, orexin. TransmitterState with exponential decay, synthesis/clearance kinetics
+- **receptor** — 20 receptor subtypes: 5-HT1A/2A/2C, D1/D2, Alpha1/Alpha2/Beta-adrenergic, GABA-A/B, CB1, mu-opioid, NMDA, AMPA, OX1/OX2, nicotinic ACh alpha4beta2/alpha7, H1. Desensitization/upregulation ODE with occupancy EMA
+- **circuit** — Rate-model neural populations, synaptic propagation, neuromodulatory gain (GANE model), tick_with_gain, Hebbian plasticity
+- **spiking** — Full-fidelity Izhikevich (2003) with 4 presets (RS, FS, CH, IB) + LIF neurons, SpikingNetwork with synaptic delay, STDP learning rule, BCM sliding threshold. Standalone ms-timescale
+- **sleep** — Borbely two-process model (exponential adenosine: tau_w=18.2h, tau_s=4.2h), automated 90-min ultradian cycle with stage transitions (NREM1→NREM2→NREM3→NREM2→REM), fall_asleep/wake_up
+- **hpa** — CRH→ACTH→cortisol cascade with biologically realistic timing (tau 300/600/900s), negative feedback, allostatic load, stress sensitization/kindling (Post 1992)
+- **dmn** — DMN/TPN anticorrelation, rumination (negative valence + high DMN), meditation suppression
+- **chronobiology** — SCN pacemaker, melatonin (peak 3AM, light suppression), asymmetric cortisol CAR coupled to wake event (not fixed clock), core body temperature, photoperiod/seasonal serotonin effects (Lambert 2002)
 
-### Added (Domain Accuracy — external review)
-- **neurotransmitter** — Histamine transmitter: primary wakefulness signal (tuberomammillary nucleus), high during wake, near-zero during all sleep stages (Saper 2005 flip-flop model). Integrated into sleep-NT coupling targets
-- **neurotransmitter** — Endocannabinoid system (anandamide/2-AG): stress buffer via retrograde CB1 signaling, dampens glutamate/GABA release, modulates HPA recovery and pain
-- **receptor** — CB1, mu-opioid, and NMDA receptor subtypes added to ReceptorSubtype/ReceptorMap with per-receptor turnover parameters
-- **regions** — VTA/Nucleus Accumbens reward circuit (`RewardCircuitState`): incentive salience/wanting (Berridge), craving, satiation, sensitization, distinct from dorsal striatum Go/NoGo
-- **chronobiology** — Asymmetric cortisol waveform: sharp CAR Gaussian rise 6-8AM + slow exponential decay, nadir ~2AM
-- **sleep** — Automated sleep stage transitions: `fall_asleep()`, `wake_up()`, `tick_stage_transitions()` with 90-min ultradian cycle (NREM1→NREM2→NREM3→NREM2→REM). NREM3-dominant early, REM-dominant late
-- **hpa** — Stress sensitization / kindling: `sensitization` field driven by allostatic_load (Post 1992 model). Amplifies effective stress intensity, creating progressive HPA reactivity under chronic stress
-- **brain** — Sex hormone modulation: `SexHormoneState` with estradiol (→serotonin synthesis) and testosterone (→amygdala reactivity). Integrated into brain tick
+### Brain Regions (10)
+- **regions** — PFC (executive control, working memory with dopamine inverted-U, fatigue/ego depletion), amygdala (threat detection, fear conditioning/extinction, habituation, bidirectional PFC coupling), hippocampus (encoding, consolidation, context, BDNF-driven neurogenesis), basal ganglia (Go/NoGo with tonic DA, RPE with phasic DA, habit formation), cerebellum (motor precision, timing, error correction), VTA/NAc reward circuit (incentive salience/wanting, craving, sensitization), locus coeruleus (tonic/phasic NE modes — Aston-Jones 2005), raphe nuclei (5-HT source with autoreceptor feedback), anterior cingulate cortex (conflict monitoring, error detection, effort allocation), insula (interoceptive cortex: body awareness, disgust, empathy, pain)
 
-### Fixed (Domain Accuracy — external review)
-- **pharmacology** — SSRIs now correctly target SERT transporter (not 5-HT1A/2A receptors). Added `TransporterType` enum (Sert, Dat, Net), `TransporterBinding` struct, and `transporter_bindings` field on `DrugProfile`. Methylphenidate similarly moved to DAT/NET transporters. Amphetamine retains D1/D2 agonist bindings (vesicular release) plus DAT/NET transporter bindings
-- **coupling** — Added bidirectional amygdala↔PFC coupling: high amygdala activation now impairs PFC executive control and working memory (Arnsten 2009 stress-cognition trade-off). Previously only PFC→amygdala inhibition existed
-- **sleep** — Replaced linear adenosine dynamics with Borbely two-process model: exponential rise during wake (tau_w=18.2h) and exponential decay during sleep (tau_s=4.2h). Agents now properly recover from sleep (0.8→0.12 after 8hr sleep vs old 0.8→0.32)
-- **neurotransmitter** — Added `dopamine_phasic` field (−1.0 to +1.0) for transient reward prediction error signals distinct from tonic dopamine level. `fire_dopamine_burst()` method. Phasic decays with ~500ms half-life. Tonic DA drives Go/NoGo motivation, phasic DA drives habit learning rate in basal ganglia coupling
-- **hpa** — Slowed HPA cascade timing ~100x to match biological reality: CRH→ACTH tau≈300s (~5 min), ACTH→cortisol tau≈600s (~10 min), feedback tau≈900s (~15 min). Previously produced equilibrium in seconds
+### Pharmacology
+- **pharmacology** — Drug profiles with Hill equation dose-response, transporter targets (SERT/DAT/NET), receptor bindings, two-phase PK lifecycle (absorption + elimination), ClearanceRateSnapshot for drift-free rate restoration. Mechanisms: Agonist, PartialAgonist, Antagonist, PositiveAllostericModulator, ReuptakeInhibitor. Withdrawal/rebound dynamics (receptor deviation feeds back into NT baselines post-drug)
+- **pharmacology** — 6 preset drugs: fluoxetine (SSRI, 5-day effective half-life), sertraline (SSRI), diazepam (BZD PAM), alprazolam (BZD PAM), amphetamine (DA/NE releaser + DAT/NET blocker), methylphenidate (DAT/NET blocker)
 
-## [0.4.0] - 2026-03-31
+### Body Systems
+- **inflammation** — Microglial activation, pro-inflammatory cytokines, neuroinflammation, sickness behavior, IDO tryptophan depletion → reduced serotonin synthesis
+- **gut_brain** — Enteric serotonin (95% of body 5-HT), vagal tone, microbiome diversity, central serotonin modifier
+- **autonomic** — Sympathetic/parasympathetic reciprocal inhibition, HRV proxy
+- **eeg** — Delta/theta/alpha/beta/gamma band powers derived from brain state (sleep stage, PFC focus, meditation, amygdala activation)
 
-### Added
-- **regions** — New module: 5 brain region models — `PfcState` (executive function, impulse control, working memory with fatigue/ego depletion), `AmygdalaState` (threat detection, fear conditioning, emotional salience, habituation), `HippocampusState` (memory encoding, consolidation, context signal, neurogenesis), `BasalGangliaState` (Go/No-Go pathways, reward prediction error, habit formation), `CerebellumState` (motor precision, timing accuracy, error correction, coordination)
-- **coupling** — 6 new brain region coupling functions: NT→PFC (dopamine inverted-U on WM, serotonin→impulse control, cortisol/sleep debt impairment), NT→amygdala (NE amplifies, serotonin/GABA/PFC dampen), NT→hippocampus (ACh→encoding, BDNF→neurogenesis, amygdala salience→emotional memory, sleep→consolidation), amygdala→HPA (threat→stress), NT→basal ganglia (dopamine Go/No-Go, PFC goal bias), NT→cerebellum (BDNF→adaptation, sleep debt→precision)
-- **coupling** — `RegionCouplingParams` for tunable region coupling strengths
-- **bridge** — 10 new region bridge functions: PFC executive/WM, amygdala fear/salience, hippocampus learning/context, basal ganglia action drive/habit, cerebellum motor quality. Extended `BrainMoodEffect` with 8 new fields
-- **bridge** — Bhava bridge complete: 13 NT/HPA/sleep/DMN output functions + `BrainMoodEffect` composite struct with `brain_mood_modifiers()` aggregator
+### Integration
+- **brain** — Unified `BrainState` with 30+ step causal tick ordering all subsystems. `AgeProfile` (PFC maturation, DA decline, sleep depth), `InteroceptiveState` (Seth 2013 predictive processing), `SexHormoneState` (estradiol→5-HT, testosterone→amygdala), `TdLearner` (Schultz 1997 TD learning), `OpponentProcess` (Solomon & Corbit 1974 hedonic adaptation)
+- **coupling** — 15+ cross-module coupling functions with tunable `CouplingParams`, `RegionCouplingParams`, `CircuitGainParams`. Sleep→NT, circadian→HPA, DMN→HPA, arousal→circuit, NT→all regions, amygdala↔PFC (bidirectional), amygdala→HPA, inflammation→HPA/NT, gut-brain→inflammation/NT, autonomic coupling, interoceptive coupling
+- **bridge** — 28-field `BrainMoodEffect` composite struct: mood offset, reward sensitivity, arousal, anxiety, focus, pain dampening, stress multiplier, burnout, energy penalty, recovery rate, drowsiness, rumination stress, regulation boost, growth plasticity, executive control, working memory, fear level, emotional salience, learning rate, action drive, habit level, motor quality, sickness behavior, sympathetic, parasympathetic, HRV, interoceptive anxiety, seasonal modifier
 
-### Changed
-- **brain** — Tick order expanded from 9 to 20 steps: region couplings and ticks integrated in correct causal order (sensory→executive→motor). 5 new `#[serde(default)]` region fields on `BrainState`
-
-## [0.3.0] - 2026-03-31
-
-### Added
-- **receptor** — New module: `ReceptorSubtype` enum (Ht1a, Ht2a, D1, D2, Alpha1, Alpha2, Beta, GabaA, GabaB), `ReceptorState` with desensitization/upregulation ODE, `ReceptorMap` with per-receptor parameterized turnover rates, `ReceptorOccupancies` for aggregate drug occupancy
-- **pharmacology** — New module: `DrugProfile` (receptor bindings, PK parameters), `ActiveDrug` (two-phase pharmacokinetics: absorption + elimination), `PharmacologyState` (receptor map + active drugs + NT coupling), Hill equation dose-response, Clark occupancy model
-- **pharmacology** — Drug mechanism types: `ReuptakeInhibitor` (reduces clearance rate), `Agonist` (raises baseline), `Antagonist` (lowers baseline), `PositiveAllostericModulator` (GABA PAM multiplier for circuit gain)
-- **pharmacology** — Preset drug constructors: `ssri_fluoxetine`, `ssri_sertraline`, `benzodiazepine_diazepam`, `benzodiazepine_alprazolam`, `stimulant_amphetamine`, `stimulant_methylphenidate`
-- **pharmacology** — `ClearanceRateSnapshot` for drift-free rate restoration each tick
-- **brain** — `BrainState::administer_drug()` convenience method, pharmacology tick step in causal order
-- **error** — `InvalidDrugParameter` error variant
-
-### Changed
-- **coupling** — `compute_circuit_gain` and `apply_arousal_circuit_coupling` now accept `gaba_pam` parameter for benzodiazepine-class PAM amplification of GABA inhibition
-- **brain** — Tick order expanded: pharmacology step inserted between sleep→NT coupling and NT tick; circuit gain now incorporates GABA PAM from active drugs
-- **brain** — `BrainState.pharmacology` field added with `#[serde(default)]` for backward-compatible deserialization
-
-## [0.2.0] - 2026-03-31
-
-### Added
-- **coupling** — New cross-module coupling functions: sleep→neurotransmitter (ACh peaks in REM, serotonin/NE suppressed), circadian→HPA (cortisol awakening response sets HPA baseline), DMN→HPA (rumination as chronic stressor with feedback gain impairment), arousal→circuit (NE/glutamate multiplicative gain via GANE model)
-- **brain** — New `BrainState` struct orchestrating all 6 subsystems with a single `tick(dt)` applying couplings in correct causal order. Composite `arousal()` and `stress()` metrics
-- **coupling** — `CouplingParams` and `CircuitGainParams` for consumer-tunable coupling strengths
-- **coupling** — `composite_arousal()` and `composite_stress()` combining multi-module state
-- **circuit** — `Circuit::tick_with_gain(gain, dt)` for neuromodulatory synaptic scaling without permanent weight mutation
-- **all modules** — `#[inline]` on all hot-path `tick`, getter, and computed property functions
-- **all modules** — `tracing` instrumentation on all public state-mutating operations (`debug!` for discrete events, `trace!` for per-tick updates)
-- **all modules** — Comprehensive test coverage: negative dt rejection, boundary conditions, untested getters, edge cases, cross-module integration tests (24hr cycle, sleep deprivation, stress-rumination feedback). Test count: 42 → 105
-
-### Changed
-- **all modules** — All `tick` methods now return `Result<(), MastishkError>`, rejecting negative time deltas with `NegativeTimeDelta` error
-- **circuit** — `add_synapse` now returns `Result`, validating population indices at creation time
-- **hpa** — Replaced Euler integration with exponential decay for stable behavior at large dt values
-- **chronobiology** — `CircadianState::default()` now derives rhythm values from `update_rhythms()` instead of hardcoded approximations
-
-### Fixed
-- **sleep** — Fixed `total_sleep` units: was incorrectly multiplying hours by 3600 (mixing seconds/hours); now consistently uses hours
-- **docs** — Removed claims of Hebbian learning and lateral inhibition from circuit module (not yet implemented)
-
-## [0.1.0] - 2026-03-31
-
-### Added
-
-- **neurotransmitter** — Monoamine dynamics (serotonin, dopamine, norepinephrine), GABA/glutamate balance, neuropeptides (oxytocin, endorphins), acetylcholine, BDNF neuroplasticity. TransmitterState with exponential decay toward baseline, NeurotransmitterProfile with arousal/reward/plasticity derivations
-- **circuit** — Neural circuit primitives: NeuralPopulation with rate-model dynamics, Synapse connections, Circuit with tick-based propagation. Excitatory/inhibitory populations, mean-field rate models
-- **sleep** — Sleep architecture: NREM1-3 and REM stages, adenosine buildup (Process S), sleep debt tracking, ultradian cycle counting. Recovery multiplier and memory consolidation rate per stage
-- **hpa** — HPA axis stress response: CRH -> ACTH -> cortisol cascade with negative feedback, allostatic load accumulation, chronic stress detection
-- **dmn** — Default mode network: DMN/TPN anticorrelation, task engagement, rest/mind-wandering, meditation depth, rumination from negative valence + high DMN
-- **chronobiology** — SCN pacemaker model: melatonin curve (peak ~3 AM, light suppression), cortisol awakening response (peak ~8 AM), core body temperature oscillation, alertness derivation
-- **error** — `MastishkError` with variants for level-out-of-range, invalid circuit, invalid sleep transition, negative time delta
+### Infrastructure
+- **error** — `MastishkError` with variants: LevelOutOfRange, InvalidCircuit, InvalidSleepTransition, NegativeTimeDelta, InvalidDrugParameter
 - **logging** — Optional structured logging via `MASTISHK_LOG` env var (feature-gated)
-- Initial criterion benchmarks for neurotransmitter tick, circuit tick, HPA tick
+- 228 tests (192 unit + 36 integration), 7 criterion benchmarks
+- All types `Serialize + Deserialize + Clone + Debug` with `#[serde(default)]` backward compatibility
+- All public enums `#[non_exhaustive]`, all pure functions `#[must_use]`, all hot paths `#[inline]`
+- `tracing` instrumentation on all state-mutating operations
+- Two external domain audits with 13+ accuracy improvements implemented

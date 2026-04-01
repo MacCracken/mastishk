@@ -43,6 +43,11 @@ pub enum DrugMechanism {
     PositiveAllostericModulator,
     /// Blocks reuptake transporter, increasing synaptic transmitter concentration.
     ReuptakeInhibitor,
+    /// Partial agonist — activates receptor with a ceiling below full agonism.
+    /// Acts as agonist when endogenous tone is low, functional antagonist when high.
+    /// The `emax` on the binding defines the intrinsic activity ceiling.
+    /// Examples: buspirone (5-HT1A), buprenorphine (mu-opioid), aripiprazole (D2).
+    PartialAgonist,
 }
 
 /// A drug's binding profile for a single receptor subtype.
@@ -102,8 +107,8 @@ impl DrugProfile {
                 hill_coeff: 1.5,
                 emax: 0.85,
             }],
-            half_life: 86_400.0, // ~1 day (active metabolite much longer)
-            onset_delay: 3600.0, // 1 hour absorption
+            half_life: 432_000.0, // ~5 days effective (parent + norfluoxetine metabolite)
+            onset_delay: 3600.0,  // 1 hour absorption
         }
     }
 
@@ -326,6 +331,7 @@ pub(crate) struct ClearanceRateSnapshot {
     pub bdnf: f32,
     pub histamine: f32,
     pub endocannabinoid: f32,
+    pub orexin: f32,
 }
 
 impl ClearanceRateSnapshot {
@@ -342,6 +348,7 @@ impl ClearanceRateSnapshot {
             bdnf: profile.bdnf.clearance_rate,
             histamine: profile.histamine.clearance_rate,
             endocannabinoid: profile.endocannabinoid.clearance_rate,
+            orexin: profile.orexin.clearance_rate,
         }
     }
 
@@ -357,6 +364,7 @@ impl ClearanceRateSnapshot {
         profile.bdnf.clearance_rate = self.bdnf;
         profile.histamine.clearance_rate = self.histamine;
         profile.endocannabinoid.clearance_rate = self.endocannabinoid;
+        profile.orexin.clearance_rate = self.orexin;
     }
 }
 
@@ -415,9 +423,14 @@ impl PharmacologyState {
     pub fn tick(&mut self, dt: f32, nt: &mut NeurotransmitterProfile) -> Result<(), MastishkError> {
         validate_dt(dt)?;
 
-        // Short-circuit when no drugs active
+        // When no drugs active, still check for withdrawal/rebound effects
         if self.active_drugs.is_empty() {
             self.gaba_pam_cache = 1.0;
+            // Withdrawal/rebound: receptor availability != baseline → NT modulation
+            apply_withdrawal_rebound(&self.receptors, nt, dt);
+            // Tick receptor recovery toward baseline (even without drugs)
+            let zero_occ = ReceptorOccupancies::default();
+            self.receptors.tick_all(&zero_occ, dt)?;
             return Ok(());
         }
 
@@ -475,6 +488,20 @@ impl PharmacologyState {
                     DrugMechanism::PositiveAllostericModulator => {
                         gaba_pam += effective * 1.5;
                     }
+                    DrugMechanism::PartialAgonist => {
+                        // Partial agonist: ceiling at emax. Acts as agonist below ceiling,
+                        // functional antagonist above (stabilizes signaling).
+                        let transmitter = receptor_to_transmitter(binding.receptor);
+                        let baseline = get_baseline_mut(nt, transmitter);
+                        let ceiling = binding.emax * 0.5; // target level = emax * scale
+                        if *baseline < ceiling {
+                            // Below ceiling: agonist effect (push up)
+                            *baseline = (*baseline + effective * 0.2).min(ceiling);
+                        } else {
+                            // Above ceiling: functional antagonist (push down)
+                            *baseline = (*baseline - effective * 0.15).max(ceiling);
+                        }
+                    }
                     DrugMechanism::ReuptakeInhibitor => {
                         // Legacy: receptor-based reuptake inhibition (prefer transporter_bindings)
                         let transmitter = receptor_to_transmitter(binding.receptor);
@@ -501,6 +528,45 @@ impl PharmacologyState {
 
 // ── Helpers ────────────────────────────────────────────────────────
 
+/// Apply withdrawal/rebound effects when no drugs are active but receptors
+/// deviate from baseline. Availability < baseline = reduced efficacy (withdrawal).
+/// Availability > baseline = rebound hypersensitivity.
+fn apply_withdrawal_rebound(receptors: &ReceptorMap, nt: &mut NeurotransmitterProfile, dt: f32) {
+    let alpha = 1.0 - (-0.05 * dt).exp();
+    // Check each receptor type for deviation from baseline
+    let pairs: [(f32, f32, TransmitterTarget); 4] = [
+        (
+            receptors.ht1a.availability,
+            receptors.ht1a.baseline,
+            TransmitterTarget::Serotonin,
+        ),
+        (
+            receptors.d1.availability,
+            receptors.d1.baseline,
+            TransmitterTarget::Dopamine,
+        ),
+        (
+            receptors.gaba_a.availability,
+            receptors.gaba_a.baseline,
+            TransmitterTarget::Gaba,
+        ),
+        (
+            receptors.mu_opioid.availability,
+            receptors.mu_opioid.baseline,
+            TransmitterTarget::Endorphins,
+        ),
+    ];
+    for (avail, baseline_avail, target) in pairs {
+        let deviation = avail - baseline_avail;
+        if deviation.abs() > 0.01 {
+            let nt_baseline = get_baseline_mut(nt, target);
+            // Reduced availability → withdrawal (lower baseline)
+            // Increased availability → rebound (higher baseline)
+            *nt_baseline = (*nt_baseline + deviation * 0.1 * alpha).clamp(0.0, 1.0);
+        }
+    }
+}
+
 /// Which transmitter a receptor subtype primarily modulates.
 #[derive(Debug, Clone, Copy)]
 enum TransmitterTarget {
@@ -511,6 +577,9 @@ enum TransmitterTarget {
     Glutamate,
     Endocannabinoid,
     Endorphins,
+    Orexin,
+    Acetylcholine,
+    Histamine,
 }
 
 fn receptor_to_transmitter(subtype: ReceptorSubtype) -> TransmitterTarget {
@@ -523,7 +592,13 @@ fn receptor_to_transmitter(subtype: ReceptorSubtype) -> TransmitterTarget {
         ReceptorSubtype::GabaA | ReceptorSubtype::GabaB => TransmitterTarget::Gaba,
         ReceptorSubtype::Cb1 => TransmitterTarget::Endocannabinoid,
         ReceptorSubtype::MuOpioid => TransmitterTarget::Endorphins,
-        ReceptorSubtype::Nmda => TransmitterTarget::Glutamate,
+        ReceptorSubtype::Nmda | ReceptorSubtype::Ampa => TransmitterTarget::Glutamate,
+        ReceptorSubtype::Ht2c => TransmitterTarget::Serotonin,
+        ReceptorSubtype::NicotinicA4b2 | ReceptorSubtype::NicotinicA7 => {
+            TransmitterTarget::Acetylcholine
+        }
+        ReceptorSubtype::H1 => TransmitterTarget::Histamine,
+        ReceptorSubtype::Ox1 | ReceptorSubtype::Ox2 => TransmitterTarget::Orexin,
     }
 }
 
@@ -544,6 +619,9 @@ fn get_clearance_rate_mut(nt: &mut NeurotransmitterProfile, target: TransmitterT
         TransmitterTarget::Glutamate => &mut nt.glutamate.clearance_rate,
         TransmitterTarget::Endocannabinoid => &mut nt.endocannabinoid.clearance_rate,
         TransmitterTarget::Endorphins => &mut nt.endorphins.clearance_rate,
+        TransmitterTarget::Orexin => &mut nt.orexin.clearance_rate,
+        TransmitterTarget::Acetylcholine => &mut nt.acetylcholine.clearance_rate,
+        TransmitterTarget::Histamine => &mut nt.histamine.clearance_rate,
     }
 }
 
@@ -556,6 +634,9 @@ fn get_baseline_mut(nt: &mut NeurotransmitterProfile, target: TransmitterTarget)
         TransmitterTarget::Glutamate => &mut nt.glutamate.baseline,
         TransmitterTarget::Endocannabinoid => &mut nt.endocannabinoid.baseline,
         TransmitterTarget::Endorphins => &mut nt.endorphins.baseline,
+        TransmitterTarget::Orexin => &mut nt.orexin.baseline,
+        TransmitterTarget::Acetylcholine => &mut nt.acetylcholine.baseline,
+        TransmitterTarget::Histamine => &mut nt.histamine.baseline,
     }
 }
 

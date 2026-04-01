@@ -53,6 +53,21 @@ pub enum ReceptorSubtype {
     MuOpioid,
     /// NMDA — glutamate ionotropic receptor. Learning/LTP, ketamine target.
     Nmda,
+    /// AMPA — primary fast excitatory glutamate receptor. >90% of fast glutamatergic transmission.
+    /// Required for NMDA activation (Mg2+ block removal via depolarization).
+    Ampa,
+    /// Orexin OX1 — wakefulness, arousal. Expressed in locus coeruleus.
+    Ox1,
+    /// Orexin OX2 — sleep-wake stability. Primary target of suvorexant (insomnia drug).
+    Ox2,
+    /// 5-HT2C — serotonin. Rate-limiting for SSRI therapeutic lag (Dremencov 2009).
+    Ht2c,
+    /// Nicotinic ACh alpha4beta2 — high affinity, nicotine target, desensitizes.
+    NicotinicA4b2,
+    /// Nicotinic ACh alpha7 — fast, low affinity, cognitive enhancement.
+    NicotinicA7,
+    /// Histamine H1 — wakefulness. Antihistamines (diphenhydramine) cause drowsiness.
+    H1,
 }
 
 /// A single receptor's dynamic state — tracks availability and adaptation.
@@ -136,6 +151,13 @@ pub struct ReceptorOccupancies {
     pub cb1: f32,
     pub mu_opioid: f32,
     pub nmda: f32,
+    pub ampa: f32,
+    pub ox1: f32,
+    pub ox2: f32,
+    pub ht2c: f32,
+    pub nicotinic_a4b2: f32,
+    pub nicotinic_a7: f32,
+    pub h1: f32,
 }
 
 impl ReceptorOccupancies {
@@ -156,6 +178,13 @@ impl ReceptorOccupancies {
             ReceptorSubtype::Cb1 => self.cb1,
             ReceptorSubtype::MuOpioid => self.mu_opioid,
             ReceptorSubtype::Nmda => self.nmda,
+            ReceptorSubtype::Ampa => self.ampa,
+            ReceptorSubtype::Ox1 => self.ox1,
+            ReceptorSubtype::Ox2 => self.ox2,
+            ReceptorSubtype::Ht2c => self.ht2c,
+            ReceptorSubtype::NicotinicA4b2 => self.nicotinic_a4b2,
+            ReceptorSubtype::NicotinicA7 => self.nicotinic_a7,
+            ReceptorSubtype::H1 => self.h1,
         }
     }
 
@@ -175,6 +204,13 @@ impl ReceptorOccupancies {
             ReceptorSubtype::Cb1 => &mut self.cb1,
             ReceptorSubtype::MuOpioid => &mut self.mu_opioid,
             ReceptorSubtype::Nmda => &mut self.nmda,
+            ReceptorSubtype::Ampa => &mut self.ampa,
+            ReceptorSubtype::Ox1 => &mut self.ox1,
+            ReceptorSubtype::Ox2 => &mut self.ox2,
+            ReceptorSubtype::Ht2c => &mut self.ht2c,
+            ReceptorSubtype::NicotinicA4b2 => &mut self.nicotinic_a4b2,
+            ReceptorSubtype::NicotinicA7 => &mut self.nicotinic_a7,
+            ReceptorSubtype::H1 => &mut self.h1,
         };
         *field = (*field + value).min(1.0);
     }
@@ -210,6 +246,52 @@ pub struct ReceptorMap {
     /// NMDA — glutamate learning/LTP. Moderate turnover (~5 days).
     #[serde(default = "default_nmda")]
     pub nmda: ReceptorState,
+    /// AMPA — fast excitatory glutamate. Fast turnover (~2 days).
+    #[serde(default = "default_ampa")]
+    pub ampa: ReceptorState,
+    /// Orexin OX1. Moderate turnover (~4 days).
+    #[serde(default = "default_ox1")]
+    pub ox1: ReceptorState,
+    /// Orexin OX2. Moderate turnover (~4 days).
+    #[serde(default = "default_ox2")]
+    pub ox2: ReceptorState,
+    /// 5-HT2C. Slow turnover (~10 days, rate-limiting for SSRI lag).
+    #[serde(default = "default_ht2c")]
+    pub ht2c: ReceptorState,
+    /// Nicotinic ACh alpha4beta2. Fast desensitization (~2 days).
+    #[serde(default = "default_nic_a4b2")]
+    pub nicotinic_a4b2: ReceptorState,
+    /// Nicotinic ACh alpha7. Fast kinetics (~2 days).
+    #[serde(default = "default_nic_a7")]
+    pub nicotinic_a7: ReceptorState,
+    /// Histamine H1. Moderate turnover (~4 days).
+    #[serde(default = "default_h1")]
+    pub h1: ReceptorState,
+}
+
+fn default_ht2c() -> ReceptorState {
+    ReceptorState::new(1.0, 864_000.0, 0.000_001_5, 0.000_000_8) // 10 days, very slow
+}
+fn default_nic_a4b2() -> ReceptorState {
+    ReceptorState::new(1.0, 172_800.0, 0.000_004, 0.000_002) // 2 days, fast desensitization
+}
+fn default_nic_a7() -> ReceptorState {
+    ReceptorState::new(1.0, 172_800.0, 0.000_003, 0.000_002)
+}
+fn default_h1() -> ReceptorState {
+    ReceptorState::new(1.0, 345_600.0, 0.000_002, 0.000_001)
+}
+
+fn default_ox1() -> ReceptorState {
+    ReceptorState::new(1.0, 345_600.0, 0.000_002, 0.000_001)
+}
+
+fn default_ox2() -> ReceptorState {
+    ReceptorState::new(1.0, 345_600.0, 0.000_002, 0.000_001)
+}
+
+fn default_ampa() -> ReceptorState {
+    ReceptorState::new(1.0, 172_800.0, 0.000_003, 0.000_002)
 }
 
 fn default_mu_opioid() -> ReceptorState {
@@ -235,11 +317,18 @@ impl Default for ReceptorMap {
             alpha1: ReceptorState::new(1.0, 345_600.0, 0.000_002, 0.000_001),
             alpha2: ReceptorState::new(1.0, 172_800.0, 0.000_003, 0.000_002),
             beta: ReceptorState::new(1.0, 345_600.0, 0.000_002, 0.000_001),
-            gaba_a: ReceptorState::new(1.0, 259_200.0, 0.000_004, 0.000_002),
+            gaba_a: ReceptorState::new(1.0, 518_400.0, 0.000_003, 0.000_001_5),
             gaba_b: ReceptorState::new(1.0, 432_000.0, 0.000_002, 0.000_001),
             cb1: default_cb1(),
             mu_opioid: default_mu_opioid(),
             nmda: default_nmda(),
+            ampa: default_ampa(),
+            ox1: default_ox1(),
+            ox2: default_ox2(),
+            ht2c: default_ht2c(),
+            nicotinic_a4b2: default_nic_a4b2(),
+            nicotinic_a7: default_nic_a7(),
+            h1: default_h1(),
         }
     }
 }
@@ -262,6 +351,13 @@ impl ReceptorMap {
             ReceptorSubtype::Cb1 => &self.cb1,
             ReceptorSubtype::MuOpioid => &self.mu_opioid,
             ReceptorSubtype::Nmda => &self.nmda,
+            ReceptorSubtype::Ampa => &self.ampa,
+            ReceptorSubtype::Ox1 => &self.ox1,
+            ReceptorSubtype::Ox2 => &self.ox2,
+            ReceptorSubtype::Ht2c => &self.ht2c,
+            ReceptorSubtype::NicotinicA4b2 => &self.nicotinic_a4b2,
+            ReceptorSubtype::NicotinicA7 => &self.nicotinic_a7,
+            ReceptorSubtype::H1 => &self.h1,
         }
     }
 
@@ -281,6 +377,13 @@ impl ReceptorMap {
             ReceptorSubtype::Cb1 => &mut self.cb1,
             ReceptorSubtype::MuOpioid => &mut self.mu_opioid,
             ReceptorSubtype::Nmda => &mut self.nmda,
+            ReceptorSubtype::Ampa => &mut self.ampa,
+            ReceptorSubtype::Ox1 => &mut self.ox1,
+            ReceptorSubtype::Ox2 => &mut self.ox2,
+            ReceptorSubtype::Ht2c => &mut self.ht2c,
+            ReceptorSubtype::NicotinicA4b2 => &mut self.nicotinic_a4b2,
+            ReceptorSubtype::NicotinicA7 => &mut self.nicotinic_a7,
+            ReceptorSubtype::H1 => &mut self.h1,
         }
     }
 
@@ -307,6 +410,15 @@ impl ReceptorMap {
         self.cb1.tick_unchecked(occupancies.cb1, dt);
         self.mu_opioid.tick_unchecked(occupancies.mu_opioid, dt);
         self.nmda.tick_unchecked(occupancies.nmda, dt);
+        self.ampa.tick_unchecked(occupancies.ampa, dt);
+        self.ox1.tick_unchecked(occupancies.ox1, dt);
+        self.ox2.tick_unchecked(occupancies.ox2, dt);
+        self.ht2c.tick_unchecked(occupancies.ht2c, dt);
+        self.nicotinic_a4b2
+            .tick_unchecked(occupancies.nicotinic_a4b2, dt);
+        self.nicotinic_a7
+            .tick_unchecked(occupancies.nicotinic_a7, dt);
+        self.h1.tick_unchecked(occupancies.h1, dt);
         Ok(())
     }
 }
@@ -381,7 +493,7 @@ mod tests {
     fn test_receptor_map_get() {
         let map = ReceptorMap::default();
         assert!((map.get(ReceptorSubtype::Ht1a).availability - 1.0).abs() < f32::EPSILON);
-        assert!((map.get(ReceptorSubtype::GabaA).tau_turnover - 259_200.0).abs() < f32::EPSILON);
+        assert!((map.get(ReceptorSubtype::GabaA).tau_turnover - 518_400.0).abs() < f32::EPSILON);
     }
 
     #[test]

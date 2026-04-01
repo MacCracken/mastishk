@@ -1,48 +1,50 @@
 //! Mastishk — Computational Neuroscience Engine
 //!
-//! **Mastishk** (Sanskrit: मस्तिष्क — brain) provides computational models of
-//! neuroscience for the AGNOS ecosystem. Neurotransmitter dynamics, neural circuit
-//! simulation, sleep architecture, HPA axis stress response, and default mode
-//! network modeling.
+//! **Mastishk** (Sanskrit: मस्तिष्क — brain) provides world-class behavioral-timescale
+//! brain simulation for the AGNOS ecosystem. 12 neurotransmitters, 20 receptor subtypes,
+//! 10 brain regions, pharmacology, spiking networks, and a 30+ step integrated brain tick.
 //!
-//! # Architecture
+//! # Modules (19)
 //!
-//! Six domain modules plus integration:
+//! **Core Neuroscience:**
+//! - [`neurotransmitter`] — 12 transmitters with tonic + phasic dopamine
+//! - [`receptor`] — 20 receptor subtypes with desensitization/upregulation ODE
+//! - [`circuit`] — Rate-model populations, synaptic propagation, Hebbian plasticity
+//! - [`spiking`] — Izhikevich + LIF neurons, SpikingNetwork, STDP (standalone ms-timescale)
+//! - [`sleep`] — Borbely two-process model, automated ultradian cycle
+//! - [`hpa`] — CRH→ACTH→cortisol cascade, allostatic load, sensitization/kindling
+//! - [`dmn`] — DMN/TPN anticorrelation, rumination, meditation
+//! - [`chronobiology`] — SCN pacemaker, melatonin, asymmetric cortisol CAR, photoperiod
 //!
-//! - [`neurotransmitter`] — Monoamine dynamics (serotonin, dopamine, norepinephrine),
-//!   GABA/glutamate balance, neuropeptides (oxytocin, endorphins), acetylcholine,
-//!   BDNF neuroplasticity. Synthesis, reuptake, degradation kinetics.
-//! - [`circuit`] — Neural circuit primitives: excitatory/inhibitory populations,
-//!   firing rates, synaptic weights, mean-field rate models.
-//! - [`sleep`] — Sleep architecture: NREM stages 1-3, REM cycling, adenosine
-//!   buildup (Process S), sleep debt, ultradian 90-min cycles.
-//! - [`hpa`] — Hypothalamic-pituitary-adrenal axis: CRH → ACTH → cortisol
-//!   cascade, negative feedback, chronic stress adaptation, allostatic load.
-//! - [`dmn`] — Default mode network: self-referential processing, mind-wandering,
-//!   meditation suppression, task-positive network switching.
-//! - [`chronobiology`] — Melatonin synthesis from light input, cortisol circadian
-//!   rhythm (CAR), core body temperature oscillation, SCN pacemaker model.
-//! - [`coupling`] — Cross-module coupling functions: sleep→neurotransmitter,
-//!   circadian→HPA, DMN→HPA, arousal→circuit. Composite metrics.
-//! - [`brain`] — Unified [`brain::BrainState`] orchestrating all subsystems
-//!   with a single `tick(dt)`.
-//! - [`bridge`] — f64 output functions for downstream consumers (bhava).
-//!   Maps neural state to emotion/personality-relevant values.
-//! - [`receptor`] — Receptor subtypes (5-HT1A/2A, D1/D2, adrenergic, GABA-A/B),
-//!   availability dynamics, desensitization/upregulation ODE.
-//! - [`pharmacology`] — Drug profiles, pharmacokinetics, Hill equation dose-response,
-//!   preset drugs (SSRIs, benzodiazepines, stimulants).
+//! **Brain Regions:**
+//! - [`regions`] — PFC, amygdala, hippocampus, basal ganglia, cerebellum, VTA/NAc,
+//!   locus coeruleus, raphe, ACC, insula
 //!
-//! # Relationship to Other Crates
+//! **Body Systems:**
+//! - [`inflammation`] — Microglia, cytokines, sickness behavior, IDO pathway
+//! - [`gut_brain`] — Enteric serotonin, vagal tone, microbiome
+//! - [`autonomic`] — Sympathetic/parasympathetic, HRV proxy
+//! - [`eeg`] — Delta/theta/alpha/beta/gamma band powers
+//!
+//! **Pharmacology:**
+//! - [`pharmacology`] — Drug profiles, Hill equation, transporters, PK lifecycle,
+//!   partial agonism, withdrawal/rebound. 6 preset drugs
+//!
+//! **Integration:**
+//! - [`coupling`] — 15+ cross-module coupling functions
+//! - [`brain`] — Unified [`brain::BrainState`] with 30+ step tick, AgeProfile,
+//!   InteroceptiveState, TdLearner, OpponentProcess
+//! - [`bridge`] — 28-field [`bridge::BrainMoodEffect`] for downstream consumers
+//!
+//! # Consumers
 //!
 //! ```text
-//! mastishk (this) — neurotransmitter dynamics, neural circuits, sleep, HPA
-//!   ↓ neurotransmitter levels feed into
-//! bhava — emotion/personality (serotonin→mood, dopamine→preference, cortisol→stress)
-//!   ↑ also bridges from
-//! bodh — psychology (cognition, perception, learning models)
-//! sharira — physiology (biomechanics, fatigue → energy)
-//! rasayan — biochemistry (enzyme kinetics, metabolic pathways)
+//! mastishk (this) → bridge.rs → f64 outputs
+//!   ├─→ bhava     — emotion/personality
+//!   ├─→ bodh      — psychology/cognition
+//!   ├─→ kiran     — game engine (provides dt)
+//!   ├─→ joshua    — agent characters
+//!   └─→ agnosai   — agent orchestration
 //! ```
 
 pub mod autonomic;

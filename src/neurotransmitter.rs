@@ -107,6 +107,10 @@ pub struct NeurotransmitterProfile {
     /// Dampens both glutamate and GABA release, modulates HPA recovery and pain.
     #[serde(default = "default_endocannabinoid")]
     pub endocannabinoid: TransmitterState,
+    /// Orexin/hypocretin — master wakefulness stabilizer (Saper 2005 flip-flop).
+    /// High during wake, suppressed during sleep. Absence → narcolepsy.
+    #[serde(default = "default_orexin")]
+    pub orexin: TransmitterState,
 }
 
 fn default_histamine() -> TransmitterState {
@@ -115,6 +119,10 @@ fn default_histamine() -> TransmitterState {
 
 fn default_endocannabinoid() -> TransmitterState {
     TransmitterState::at_baseline(0.4, 0.01, 0.02)
+}
+
+fn default_orexin() -> TransmitterState {
+    TransmitterState::at_baseline(0.6, 0.04, 0.05)
 }
 
 impl Default for NeurotransmitterProfile {
@@ -132,6 +140,7 @@ impl Default for NeurotransmitterProfile {
             bdnf: TransmitterState::at_baseline(0.5, 0.005, 0.005),
             histamine: default_histamine(),
             endocannabinoid: default_endocannabinoid(),
+            orexin: default_orexin(),
         }
     }
 }
@@ -156,6 +165,7 @@ impl NeurotransmitterProfile {
         self.bdnf.tick_unchecked(dt);
         self.histamine.tick_unchecked(dt);
         self.endocannabinoid.tick_unchecked(dt);
+        self.orexin.tick_unchecked(dt);
         // Phasic DA decays rapidly (transient burst, ~500ms half-life)
         self.dopamine_phasic *= (-dt / 0.5).exp();
         Ok(())
