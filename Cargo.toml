@@ -1,0 +1,34 @@
+[package]
+name = "mastishk"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "GPL-3.0-only"
+description = "Mastishk — computational neuroscience: neurotransmitters, neural circuits, sleep stages, HPA axis, default mode network"
+homepage = "https://github.com/MacCracken/mastishk"
+repository = "https://github.com/MacCracken/mastishk"
+readme = "README.md"
+documentation = "https://docs.rs/mastishk"
+keywords = ["neuroscience", "brain", "neurotransmitter", "circadian", "cognition"]
+categories = ["science", "simulation"]
+exclude = [".claude/", ".github/", "docs/", "scripts/"]
+
+[dependencies]
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+thiserror = { version = "2", default-features = false }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"], optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+serde_json = "1"
+
+[features]
+default = ["std"]
+std = ["serde/std", "thiserror/std"]
+full = ["std", "logging"]
+logging = ["dep:tracing-subscriber"]
+
+[[bench]]
+name = "benchmarks"
+harness = false

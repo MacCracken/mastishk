@@ -1,0 +1,194 @@
+//! Neurotransmitter dynamics — synthesis, release, reuptake, degradation.
+//!
+//! Models monoamines (serotonin, dopamine, norepinephrine), amino acid transmitters
+//! (GABA, glutamate), neuropeptides (oxytocin, endorphins), acetylcholine, and BDNF.
+//! Each neurotransmitter has a normalized level (0.0–1.0) representing relative
+//! concentration, with kinetic parameters for synthesis and clearance.
+
+use serde::{Deserialize, Serialize};
+
+/// A neurotransmitter's current state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransmitterState {
+    /// Normalized level (0.0 = depleted, 1.0 = saturated).
+    pub level: f32,
+    /// Baseline level the system trends toward.
+    pub baseline: f32,
+    /// Synthesis rate (units per second toward baseline).
+    pub synthesis_rate: f32,
+    /// Clearance rate (reuptake + degradation, per second).
+    pub clearance_rate: f32,
+}
+
+impl TransmitterState {
+    /// Create a new transmitter at its baseline level.
+    #[must_use]
+    pub fn at_baseline(baseline: f32, synthesis_rate: f32, clearance_rate: f32) -> Self {
+        Self {
+            level: baseline,
+            baseline,
+            synthesis_rate,
+            clearance_rate,
+        }
+    }
+
+    /// Apply a stimulus (positive = release, negative = inhibition).
+    /// Level is clamped to 0.0..=1.0.
+    pub fn stimulate(&mut self, delta: f32) {
+        self.level = (self.level + delta).clamp(0.0, 1.0);
+    }
+
+    /// Tick the transmitter toward baseline over `dt` seconds.
+    /// Uses exponential decay toward baseline.
+    pub fn tick(&mut self, dt: f32) {
+        let diff = self.baseline - self.level;
+        let rate = if diff > 0.0 {
+            self.synthesis_rate
+        } else {
+            self.clearance_rate
+        };
+        self.level += diff * (1.0 - (-rate * dt).exp());
+        self.level = self.level.clamp(0.0, 1.0);
+    }
+
+    /// How far above or below baseline (negative = depleted, positive = elevated).
+    #[must_use]
+    pub fn deviation(&self) -> f32 {
+        self.level - self.baseline
+    }
+}
+
+/// The major neurotransmitter systems modeled together.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NeurotransmitterProfile {
+    /// Serotonin (5-HT) — mood baseline, impulse control.
+    pub serotonin: TransmitterState,
+    /// Dopamine (DA) — reward, motivation, preference.
+    pub dopamine: TransmitterState,
+    /// Norepinephrine (NE) — arousal, alertness, fight-or-flight.
+    pub norepinephrine: TransmitterState,
+    /// GABA — primary inhibitory, anxiolytic.
+    pub gaba: TransmitterState,
+    /// Glutamate — primary excitatory.
+    pub glutamate: TransmitterState,
+    /// Oxytocin — social bonding, trust.
+    pub oxytocin: TransmitterState,
+    /// Endorphins — pain dampening, stress recovery.
+    pub endorphins: TransmitterState,
+    /// Acetylcholine (ACh) — attention, memory consolidation.
+    pub acetylcholine: TransmitterState,
+    /// BDNF — neuroplasticity, trait adaptation rate.
+    pub bdnf: TransmitterState,
+}
+
+impl Default for NeurotransmitterProfile {
+    fn default() -> Self {
+        Self {
+            serotonin: TransmitterState::at_baseline(0.5, 0.02, 0.03),
+            dopamine: TransmitterState::at_baseline(0.4, 0.03, 0.05),
+            norepinephrine: TransmitterState::at_baseline(0.3, 0.04, 0.06),
+            gaba: TransmitterState::at_baseline(0.5, 0.03, 0.03),
+            glutamate: TransmitterState::at_baseline(0.5, 0.04, 0.04),
+            oxytocin: TransmitterState::at_baseline(0.3, 0.01, 0.02),
+            endorphins: TransmitterState::at_baseline(0.2, 0.01, 0.03),
+            acetylcholine: TransmitterState::at_baseline(0.4, 0.03, 0.04),
+            bdnf: TransmitterState::at_baseline(0.5, 0.005, 0.005),
+        }
+    }
+}
+
+impl NeurotransmitterProfile {
+    /// Tick all transmitters toward their baselines.
+    pub fn tick_all(&mut self, dt: f32) {
+        self.serotonin.tick(dt);
+        self.dopamine.tick(dt);
+        self.norepinephrine.tick(dt);
+        self.gaba.tick(dt);
+        self.glutamate.tick(dt);
+        self.oxytocin.tick(dt);
+        self.endorphins.tick(dt);
+        self.acetylcholine.tick(dt);
+        self.bdnf.tick(dt);
+    }
+
+    /// GABA/glutamate ratio — >1.0 = inhibition dominant, <1.0 = excitation dominant.
+    #[must_use]
+    pub fn inhibition_ratio(&self) -> f32 {
+        if self.glutamate.level > 0.0 {
+            self.gaba.level / self.glutamate.level
+        } else {
+            f32::INFINITY
+        }
+    }
+
+    /// Overall arousal level derived from NE + glutamate - GABA.
+    #[must_use]
+    pub fn arousal(&self) -> f32 {
+        ((self.norepinephrine.level + self.glutamate.level - self.gaba.level) / 2.0).clamp(0.0, 1.0)
+    }
+
+    /// Reward sensitivity derived from dopamine level.
+    #[must_use]
+    pub fn reward_sensitivity(&self) -> f32 {
+        self.dopamine.level
+    }
+
+    /// Neuroplasticity rate derived from BDNF.
+    #[must_use]
+    pub fn plasticity_rate(&self) -> f32 {
+        self.bdnf.level
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_transmitter_at_baseline() {
+        let t = TransmitterState::at_baseline(0.5, 0.02, 0.03);
+        assert!((t.level - 0.5).abs() < f32::EPSILON);
+        assert!((t.deviation()).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_stimulate_clamps() {
+        let mut t = TransmitterState::at_baseline(0.5, 0.02, 0.03);
+        t.stimulate(0.8);
+        assert!((t.level - 1.0).abs() < f32::EPSILON);
+        t.stimulate(-2.0);
+        assert!(t.level >= 0.0);
+    }
+
+    #[test]
+    fn test_tick_toward_baseline() {
+        let mut t = TransmitterState::at_baseline(0.5, 0.1, 0.1);
+        t.level = 0.9;
+        t.tick(30.0);
+        assert!((t.level - t.baseline).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_profile_default() {
+        let p = NeurotransmitterProfile::default();
+        assert!(p.arousal() >= 0.0 && p.arousal() <= 1.0);
+        assert!(p.inhibition_ratio() > 0.0);
+    }
+
+    #[test]
+    fn test_tick_all() {
+        let mut p = NeurotransmitterProfile::default();
+        p.serotonin.stimulate(0.3);
+        p.tick_all(1.0);
+        // Should have moved toward baseline
+        assert!(p.serotonin.level < 0.8);
+    }
+
+    #[test]
+    fn test_serde_roundtrip() {
+        let p = NeurotransmitterProfile::default();
+        let json = serde_json::to_string(&p).unwrap();
+        let p2: NeurotransmitterProfile = serde_json::from_str(&json).unwrap();
+        assert!((p2.serotonin.level - p.serotonin.level).abs() < f32::EPSILON);
+    }
+}
