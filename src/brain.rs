@@ -271,4 +271,27 @@ mod tests {
 
         assert!(asleep_arousal < awake_arousal);
     }
+
+    #[test]
+    fn test_all_values_finite_after_extended_simulation() {
+        let mut brain = brain_with_circuit();
+        brain.administer_drug(crate::pharmacology::DrugProfile::ssri_fluoxetine(), 0.5);
+        brain.dmn.rumination = 0.6;
+        brain.sleep.stage = SleepStage::Rem;
+
+        // 1 hour in 1-second steps with diverse active state
+        for _ in 0..3600 {
+            brain.tick(1.0).unwrap();
+        }
+
+        // Verify no NaN/Inf in any subsystem
+        assert!(brain.neurotransmitter.serotonin.level.is_finite());
+        assert!(brain.neurotransmitter.dopamine.level.is_finite());
+        assert!(brain.hpa.cortisol.is_finite());
+        assert!(brain.hpa.allostatic_load.is_finite());
+        assert!(brain.circadian.melatonin.is_finite());
+        assert!(brain.arousal().is_finite());
+        assert!(brain.stress().is_finite());
+        assert!(brain.pharmacology.gaba_pam_multiplier().is_finite());
+    }
 }

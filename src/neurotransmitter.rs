@@ -136,13 +136,14 @@ impl NeurotransmitterProfile {
     }
 
     /// GABA/glutamate ratio — >1.0 = inhibition dominant, <1.0 = excitation dominant.
+    /// Returns at most 100.0 when glutamate is near zero (avoids infinity propagation).
     #[inline]
     #[must_use]
     pub fn inhibition_ratio(&self) -> f32 {
-        if self.glutamate.level > 0.0 {
-            self.gaba.level / self.glutamate.level
+        if self.glutamate.level > f32::EPSILON {
+            (self.gaba.level / self.glutamate.level).min(100.0)
         } else {
-            f32::INFINITY
+            100.0
         }
     }
 
@@ -257,7 +258,7 @@ mod tests {
     fn test_inhibition_ratio_zero_glutamate() {
         let mut p = NeurotransmitterProfile::default();
         p.glutamate.level = 0.0;
-        assert!(p.inhibition_ratio().is_infinite());
+        assert!((p.inhibition_ratio() - 100.0).abs() < f32::EPSILON);
     }
 
     #[test]

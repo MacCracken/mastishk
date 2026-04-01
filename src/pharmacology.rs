@@ -262,6 +262,10 @@ impl ActiveDrug {
     }
 
     /// Advance pharmacokinetics by `dt` seconds.
+    ///
+    /// Two-phase model: linear absorption ramp over `onset_delay` to peak
+    /// concentration (`dose`), then first-order exponential elimination with
+    /// rate constant `ln(2) / half_life`.
     #[inline]
     pub(crate) fn tick_pk(&mut self, dt: f32) {
         self.time_since_admin += dt;
@@ -442,7 +446,7 @@ impl PharmacologyState {
             for binding in &drug.profile.bindings {
                 let occ = drug.occupancy_at(binding);
                 let receptor_avail = self.receptors.get(binding.receptor).availability;
-                let effective = occ * receptor_avail;
+                let effective = (occ * receptor_avail).clamp(0.0, 1.0);
 
                 match binding.mechanism {
                     DrugMechanism::ReuptakeInhibitor => {

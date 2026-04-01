@@ -79,7 +79,9 @@ impl ReceptorState {
         Ok(())
     }
 
-    /// Tick without validating dt.
+    /// Tick without validating dt. Updates occupancy EMA then applies the
+    /// desensitization ODE: `d(avail)/dt = (baseline - avail) / tau_turnover
+    /// - k_des * occupancy_ema + k_up * (1 - occupancy_ema) * max(0, baseline - avail)`.
     #[inline]
     pub(crate) fn tick_unchecked(&mut self, occupancy: f32, dt: f32) {
         // Update occupancy EMA (time constant ~300s ≈ 5 minutes)
@@ -341,6 +343,28 @@ mod tests {
         occ.add(ReceptorSubtype::GabaA, 0.6);
         occ.add(ReceptorSubtype::GabaA, 0.6); // should clamp to 1.0
         assert!((occ.gaba_a - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_upregulation_does_not_apply_when_above_baseline() {
+        // When availability > baseline, upregulation term should be zero
+        // (the .max(0.0) in the ODE ensures this)
+        let mut r = ReceptorState::new(1.0, 259_200.0, 0.0, 0.01);
+        r.availability = 1.3; // artificially above baseline
+        r.tick_unchecked(0.0, 86400.0); // 1 day, no occupancy
+        // Should trend back toward baseline, not keep rising
+        assert!(r.availability < 1.3);
+        assert!(r.availability >= 1.0); // should approach but not undershoot baseline
+    }
+
+    #[test]
+    fn test_zero_occupancy_maintains_baseline() {
+        let mut r = ReceptorState::new(1.0, 604_800.0, 0.000_002, 0.000_001);
+        for _ in 0..1000 {
+            r.tick_unchecked(0.0, 1.0);
+        }
+        // With no occupancy, availability should stay near baseline
+        assert!((r.availability - 1.0).abs() < 0.01);
     }
 
     #[test]
