@@ -99,6 +99,22 @@ pub struct NeurotransmitterProfile {
     pub acetylcholine: TransmitterState,
     /// BDNF — neuroplasticity, trait adaptation rate.
     pub bdnf: TransmitterState,
+    /// Histamine (HA) — primary wakefulness signal (tuberomammillary nucleus).
+    /// High during wake, near-zero during sleep (Saper 2005 flip-flop model).
+    #[serde(default = "default_histamine")]
+    pub histamine: TransmitterState,
+    /// Endocannabinoid (anandamide/2-AG) — stress buffer, retrograde CB1 signaling.
+    /// Dampens both glutamate and GABA release, modulates HPA recovery and pain.
+    #[serde(default = "default_endocannabinoid")]
+    pub endocannabinoid: TransmitterState,
+}
+
+fn default_histamine() -> TransmitterState {
+    TransmitterState::at_baseline(0.6, 0.05, 0.06)
+}
+
+fn default_endocannabinoid() -> TransmitterState {
+    TransmitterState::at_baseline(0.4, 0.01, 0.02)
 }
 
 impl Default for NeurotransmitterProfile {
@@ -114,6 +130,8 @@ impl Default for NeurotransmitterProfile {
             endorphins: TransmitterState::at_baseline(0.2, 0.01, 0.03),
             acetylcholine: TransmitterState::at_baseline(0.4, 0.03, 0.04),
             bdnf: TransmitterState::at_baseline(0.5, 0.005, 0.005),
+            histamine: default_histamine(),
+            endocannabinoid: default_endocannabinoid(),
         }
     }
 }
@@ -136,6 +154,8 @@ impl NeurotransmitterProfile {
         self.endorphins.tick_unchecked(dt);
         self.acetylcholine.tick_unchecked(dt);
         self.bdnf.tick_unchecked(dt);
+        self.histamine.tick_unchecked(dt);
+        self.endocannabinoid.tick_unchecked(dt);
         // Phasic DA decays rapidly (transient burst, ~500ms half-life)
         self.dopamine_phasic *= (-dt / 0.5).exp();
         Ok(())

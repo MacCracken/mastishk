@@ -464,6 +464,107 @@ impl CerebellumState {
     }
 }
 
+// ── VTA / Nucleus Accumbens Reward Circuit ─────────────────────────
+
+/// VTA/Nucleus Accumbens reward circuit — incentive salience, wanting, craving.
+///
+/// Distinct from dorsal striatum Go/NoGo (basal ganglia). The mesolimbic pathway
+/// from VTA to NAc encodes "wanting" (incentive salience, Berridge) rather than
+/// "liking" or action selection. Drives approach motivation and reward-seeking.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RewardCircuitState {
+    /// VTA dopaminergic neuron activity (0.0–1.0). Drives NAc dopamine.
+    pub vta_activity: f32,
+    /// Nucleus accumbens incentive salience / "wanting" (0.0–1.0).
+    pub incentive_salience: f32,
+    /// Craving intensity (0.0–1.0). Elevated wanting without satisfaction.
+    pub craving: f32,
+    /// Reward satiation (0.0–1.0). Recent reward reduces wanting temporarily.
+    pub satiation: f32,
+    /// Sensitization (0.0–1.0). Chronic stimulation increases future reactivity.
+    pub sensitization: f32,
+}
+
+impl Default for RewardCircuitState {
+    fn default() -> Self {
+        Self {
+            vta_activity: 0.3,
+            incentive_salience: 0.3,
+            craving: 0.0,
+            satiation: 0.0,
+            sensitization: 0.0,
+        }
+    }
+}
+
+impl RewardCircuitState {
+    /// Tick reward circuit dynamics.
+    #[inline]
+    pub fn tick(&mut self, dt: f32) -> Result<(), MastishkError> {
+        validate_dt(dt)?;
+        // VTA activity decays toward resting
+        self.vta_activity += (0.3 - self.vta_activity) * (1.0 - (-0.1 * dt).exp());
+        self.vta_activity = self.vta_activity.clamp(0.0, 1.0);
+
+        // Incentive salience driven by VTA, boosted by sensitization
+        let salience_target = self.vta_activity * (1.0 + self.sensitization * 0.5);
+        self.incentive_salience +=
+            (salience_target - self.incentive_salience) * (1.0 - (-0.08 * dt).exp());
+        self.incentive_salience = self.incentive_salience.clamp(0.0, 1.0);
+
+        // Craving = wanting without satisfaction (wanting minus satiation)
+        self.craving = (self.incentive_salience - self.satiation * 0.8).clamp(0.0, 1.0);
+
+        // Satiation decays (wearing off)
+        self.satiation += (0.0 - self.satiation) * (1.0 - (-0.03 * dt).exp());
+
+        // Sensitization changes very slowly
+        self.sensitization += (0.0 - self.sensitization) * (1.0 - (-0.0005 * dt).exp());
+
+        tracing::trace!(
+            vta = self.vta_activity,
+            wanting = self.incentive_salience,
+            craving = self.craving,
+            "reward circuit tick"
+        );
+        Ok(())
+    }
+
+    /// Encounter a reward cue — activates VTA, increases wanting.
+    #[inline]
+    pub fn reward_cue(&mut self, salience: f32) {
+        self.vta_activity = (self.vta_activity + salience * 0.3).min(1.0);
+        tracing::debug!(salience, vta = self.vta_activity, "reward cue perceived");
+    }
+
+    /// Receive reward — provides satiation, reduces craving temporarily.
+    #[inline]
+    pub fn receive_reward(&mut self, magnitude: f32) {
+        self.satiation = (self.satiation + magnitude * 0.5).min(1.0);
+        // Repeated reward can sensitize the circuit
+        self.sensitization = (self.sensitization + magnitude * 0.01).min(1.0);
+        tracing::debug!(
+            magnitude,
+            satiation = self.satiation,
+            "reward received (VTA/NAc)"
+        );
+    }
+
+    /// Current wanting/approach motivation level.
+    #[inline]
+    #[must_use]
+    pub fn wanting(&self) -> f32 {
+        self.incentive_salience
+    }
+
+    /// Whether actively craving (wanting without recent reward).
+    #[inline]
+    #[must_use]
+    pub fn is_craving(&self) -> bool {
+        self.craving > 0.4
+    }
+}
+
 // ── Tests ──────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -700,5 +801,48 @@ mod tests {
         let json = serde_json::to_string(&c).unwrap();
         let c2: CerebellumState = serde_json::from_str(&json).unwrap();
         assert!((c2.motor_precision - c.motor_precision).abs() < f32::EPSILON);
+    }
+
+    // ── Reward Circuit ─────────────────────────────────────────────
+
+    #[test]
+    fn test_reward_cue_activates_vta() {
+        let mut rc = RewardCircuitState::default();
+        let before = rc.vta_activity;
+        rc.reward_cue(0.8);
+        assert!(rc.vta_activity > before);
+    }
+
+    #[test]
+    fn test_reward_provides_satiation() {
+        let mut rc = RewardCircuitState::default();
+        rc.reward_cue(0.8);
+        rc.tick(1.0).unwrap();
+        assert!(rc.craving > 0.0); // wanting without reward
+        rc.receive_reward(0.9);
+        rc.tick(1.0).unwrap();
+        assert!(rc.satiation > 0.0);
+        // Craving should decrease with satiation
+        let after_reward_craving = rc.craving;
+        assert!(after_reward_craving < rc.incentive_salience);
+    }
+
+    #[test]
+    fn test_reward_circuit_decays() {
+        let mut rc = RewardCircuitState::default();
+        rc.reward_cue(1.0);
+        for _ in 0..100 {
+            rc.tick(1.0).unwrap();
+        }
+        // VTA should have decayed toward resting
+        assert!(rc.vta_activity < 0.5);
+    }
+
+    #[test]
+    fn test_reward_circuit_serde_roundtrip() {
+        let rc = RewardCircuitState::default();
+        let json = serde_json::to_string(&rc).unwrap();
+        let rc2: RewardCircuitState = serde_json::from_str(&json).unwrap();
+        assert!((rc2.vta_activity - rc.vta_activity).abs() < f32::EPSILON);
     }
 }

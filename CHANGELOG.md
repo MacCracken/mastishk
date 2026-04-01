@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Domain Accuracy — external review)
+- **neurotransmitter** — Histamine transmitter: primary wakefulness signal (tuberomammillary nucleus), high during wake, near-zero during all sleep stages (Saper 2005 flip-flop model). Integrated into sleep-NT coupling targets
+- **neurotransmitter** — Endocannabinoid system (anandamide/2-AG): stress buffer via retrograde CB1 signaling, dampens glutamate/GABA release, modulates HPA recovery and pain. CB1 receptor added to ReceptorMap
+- **regions** — VTA/Nucleus Accumbens reward circuit (`RewardCircuitState`): incentive salience/wanting (Berridge), craving (wanting minus satiation), reward sensitization, distinct from dorsal striatum Go/NoGo. `reward_cue()`, `receive_reward()`, `wanting()`, `is_craving()`
+- **chronobiology** — Asymmetric cortisol waveform replacing symmetric cosine: sharp CAR Gaussian rise 6-8AM + slow exponential decay through day, nadir ~2AM
+
 ### Fixed (Domain Accuracy — external review)
 - **pharmacology** — SSRIs now correctly target SERT transporter (not 5-HT1A/2A receptors). Added `TransporterType` enum (Sert, Dat, Net), `TransporterBinding` struct, and `transporter_bindings` field on `DrugProfile`. Methylphenidate similarly moved to DAT/NET transporters. Amphetamine retains D1/D2 agonist bindings (vesicular release) plus DAT/NET transporter bindings
 - **coupling** — Added bidirectional amygdala↔PFC coupling: high amygdala activation now impairs PFC executive control and working memory (Arnsten 2009 stress-cognition trade-off). Previously only PFC→amygdala inhibition existed

@@ -23,6 +23,7 @@ use crate::neurotransmitter::NeurotransmitterProfile;
 use crate::pharmacology::{DrugProfile, PharmacologyState};
 use crate::regions::{
     AmygdalaState, BasalGangliaState, CerebellumState, HippocampusState, PfcState,
+    RewardCircuitState,
 };
 use crate::sleep::SleepState;
 
@@ -69,6 +70,9 @@ pub struct BrainState {
     /// Cerebellum (motor precision, timing, error correction).
     #[serde(default)]
     pub cerebellum: CerebellumState,
+    /// VTA/Nucleus Accumbens reward circuit (incentive salience, wanting, craving).
+    #[serde(default)]
+    pub reward_circuit: RewardCircuitState,
 }
 
 impl BrainState {
@@ -194,6 +198,7 @@ impl BrainState {
         self.pfc.tick(dt)?;
         self.basal_ganglia.tick(dt)?;
         self.cerebellum.tick(dt)?;
+        self.reward_circuit.tick(dt)?;
 
         // 19. Arousal → circuit coupling
         apply_arousal_circuit_coupling(

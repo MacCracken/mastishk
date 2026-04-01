@@ -99,12 +99,29 @@ fn melatonin_curve(hour: f32) -> f32 {
     (phase.cos() * 0.5 + 0.5).clamp(0.0, 1.0)
 }
 
-/// Cortisol CAR curve: cosine with peak at 8 AM.
+/// Cortisol CAR curve: asymmetric waveform with sharp morning rise and slow decay.
+///
+/// Models the cortisol awakening response (CAR): sharp rise 6-8 AM peaking at ~8 AM,
+/// then slow exponential decay through afternoon/evening to nadir around 2 AM.
+/// More biologically accurate than a symmetric cosine.
 #[inline]
 #[must_use]
 fn cortisol_curve(hour: f32) -> f32 {
-    let phase = (hour - 8.0) * core::f32::consts::TAU / 24.0;
-    (phase.cos() * 0.35 + 0.35).clamp(0.0, 1.0)
+    // Nadir baseline (~2 AM)
+    let nadir = 0.05;
+    // Peak at ~8 AM with sharp Gaussian rise (sigma = 1.5 hours)
+    let car_peak = (-((hour - 8.0).powi(2)) / (2.0 * 1.5 * 1.5)).exp() * 0.65;
+    // Slow exponential decay from morning through day (tau = 8 hours from peak)
+    let decay = if hour > 8.0 {
+        0.4 * (-(hour - 8.0) / 8.0).exp()
+    } else if hour < 4.0 {
+        // Late night: still in nadir
+        0.0
+    } else {
+        // 4-8 AM: rising phase captured by Gaussian
+        0.0
+    };
+    (nadir + car_peak + decay).clamp(0.0, 0.7)
 }
 
 /// Core body temperature curve: cosine with peak at 19:00 (7 PM).

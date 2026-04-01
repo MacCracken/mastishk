@@ -47,6 +47,8 @@ pub enum ReceptorSubtype {
     GabaA,
     /// GABA-B — slow inhibition (metabotropic). Muscle relaxation, presynaptic.
     GabaB,
+    /// CB1 — cannabinoid receptor 1. Retrograde signaling, stress buffer, pain modulation.
+    Cb1,
 }
 
 /// A single receptor's dynamic state — tracks availability and adaptation.
@@ -127,6 +129,7 @@ pub struct ReceptorOccupancies {
     pub beta: f32,
     pub gaba_a: f32,
     pub gaba_b: f32,
+    pub cb1: f32,
 }
 
 impl ReceptorOccupancies {
@@ -144,6 +147,7 @@ impl ReceptorOccupancies {
             ReceptorSubtype::Beta => self.beta,
             ReceptorSubtype::GabaA => self.gaba_a,
             ReceptorSubtype::GabaB => self.gaba_b,
+            ReceptorSubtype::Cb1 => self.cb1,
         }
     }
 
@@ -160,6 +164,7 @@ impl ReceptorOccupancies {
             ReceptorSubtype::Beta => &mut self.beta,
             ReceptorSubtype::GabaA => &mut self.gaba_a,
             ReceptorSubtype::GabaB => &mut self.gaba_b,
+            ReceptorSubtype::Cb1 => &mut self.cb1,
         };
         *field = (*field + value).min(1.0);
     }
@@ -186,6 +191,13 @@ pub struct ReceptorMap {
     pub gaba_a: ReceptorState,
     /// GABA-B. Moderate turnover (~5 days).
     pub gaba_b: ReceptorState,
+    /// CB1 — cannabinoid receptor 1. Moderate turnover (~5 days).
+    #[serde(default = "default_cb1")]
+    pub cb1: ReceptorState,
+}
+
+fn default_cb1() -> ReceptorState {
+    ReceptorState::new(1.0, 432_000.0, 0.000_002, 0.000_001)
 }
 
 impl Default for ReceptorMap {
@@ -201,6 +213,7 @@ impl Default for ReceptorMap {
             beta: ReceptorState::new(1.0, 345_600.0, 0.000_002, 0.000_001),
             gaba_a: ReceptorState::new(1.0, 259_200.0, 0.000_004, 0.000_002),
             gaba_b: ReceptorState::new(1.0, 432_000.0, 0.000_002, 0.000_001),
+            cb1: default_cb1(),
         }
     }
 }
@@ -220,6 +233,7 @@ impl ReceptorMap {
             ReceptorSubtype::Beta => &self.beta,
             ReceptorSubtype::GabaA => &self.gaba_a,
             ReceptorSubtype::GabaB => &self.gaba_b,
+            ReceptorSubtype::Cb1 => &self.cb1,
         }
     }
 
@@ -236,6 +250,7 @@ impl ReceptorMap {
             ReceptorSubtype::Beta => &mut self.beta,
             ReceptorSubtype::GabaA => &mut self.gaba_a,
             ReceptorSubtype::GabaB => &mut self.gaba_b,
+            ReceptorSubtype::Cb1 => &mut self.cb1,
         }
     }
 
@@ -259,6 +274,7 @@ impl ReceptorMap {
         self.beta.tick_unchecked(occupancies.beta, dt);
         self.gaba_a.tick_unchecked(occupancies.gaba_a, dt);
         self.gaba_b.tick_unchecked(occupancies.gaba_b, dt);
+        self.cb1.tick_unchecked(occupancies.cb1, dt);
         Ok(())
     }
 }

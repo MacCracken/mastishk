@@ -75,11 +75,16 @@
 
 ### 0.6.0 — Domain Accuracy (high-priority gaps from external review)
 
-- [ ] Histamine transmitter — primary wakefulness signal, sleep-wake flip-flop (Saper 2005)
-- [ ] Endocannabinoid system (anandamide/2-AG, CB1 receptor) — stress buffer, HPA recovery
-- [ ] VTA/Nucleus Accumbens reward circuit — incentive salience/wanting distinct from Go/NoGo
-- [ ] Cortisol asymmetric waveform — sharp CAR rise + slow exponential decay (replace symmetric cosine)
-- [ ] Transporter targets (SERT, DAT, NET) — distinct pharmacology targets for reuptake inhibitors
+- [x] Histamine transmitter — wakefulness signal, sleep-wake flip-flop (Saper 2005)
+- [x] Endocannabinoid system (anandamide/2-AG, CB1 receptor) — stress buffer, HPA recovery
+- [x] VTA/Nucleus Accumbens reward circuit — incentive salience/wanting distinct from Go/NoGo
+- [x] Cortisol asymmetric waveform — sharp CAR Gaussian rise + slow exponential decay
+- [x] Transporter targets (SERT, DAT, NET) — pharmacologically correct reuptake inhibitor routing
+- [x] Dopamine tonic/phasic split — tonic drives Go/NoGo, phasic drives RPE learning
+- [x] Borbely adenosine model — exponential rise/decay (tau_w=18.2h, tau_s=4.2h)
+- [x] HPA cascade realistic timing — CRH→ACTH 5min, ACTH→cortisol 10min, feedback 15min
+- [x] Bidirectional amygdala↔PFC coupling — stress impairs executive function (Arnsten 2009)
+- [x] SSRI→SERT transporter fix — SSRIs correctly target transporter, not receptors
 - [ ] Mu-opioid + NMDA receptor subtypes — pain/endorphin system + glutamate learning
 - [ ] Automated sleep stage transitions — 90-min ultradian cycle, NREM-dominant early / REM-dominant late
 - [ ] Stress sensitization / kindling — allostatic load feeds back to lower HPA activation threshold

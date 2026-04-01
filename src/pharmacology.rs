@@ -324,6 +324,8 @@ pub(crate) struct ClearanceRateSnapshot {
     pub endorphins: f32,
     pub acetylcholine: f32,
     pub bdnf: f32,
+    pub histamine: f32,
+    pub endocannabinoid: f32,
 }
 
 impl ClearanceRateSnapshot {
@@ -338,6 +340,8 @@ impl ClearanceRateSnapshot {
             endorphins: profile.endorphins.clearance_rate,
             acetylcholine: profile.acetylcholine.clearance_rate,
             bdnf: profile.bdnf.clearance_rate,
+            histamine: profile.histamine.clearance_rate,
+            endocannabinoid: profile.endocannabinoid.clearance_rate,
         }
     }
 
@@ -351,6 +355,8 @@ impl ClearanceRateSnapshot {
         profile.endorphins.clearance_rate = self.endorphins;
         profile.acetylcholine.clearance_rate = self.acetylcholine;
         profile.bdnf.clearance_rate = self.bdnf;
+        profile.histamine.clearance_rate = self.histamine;
+        profile.endocannabinoid.clearance_rate = self.endocannabinoid;
     }
 }
 
@@ -502,6 +508,7 @@ enum TransmitterTarget {
     Dopamine,
     Norepinephrine,
     Gaba,
+    Endocannabinoid,
 }
 
 fn receptor_to_transmitter(subtype: ReceptorSubtype) -> TransmitterTarget {
@@ -512,6 +519,7 @@ fn receptor_to_transmitter(subtype: ReceptorSubtype) -> TransmitterTarget {
             TransmitterTarget::Norepinephrine
         }
         ReceptorSubtype::GabaA | ReceptorSubtype::GabaB => TransmitterTarget::Gaba,
+        ReceptorSubtype::Cb1 => TransmitterTarget::Endocannabinoid,
     }
 }
 
@@ -529,6 +537,7 @@ fn get_clearance_rate_mut(nt: &mut NeurotransmitterProfile, target: TransmitterT
         TransmitterTarget::Dopamine => &mut nt.dopamine.clearance_rate,
         TransmitterTarget::Norepinephrine => &mut nt.norepinephrine.clearance_rate,
         TransmitterTarget::Gaba => &mut nt.gaba.clearance_rate,
+        TransmitterTarget::Endocannabinoid => &mut nt.endocannabinoid.clearance_rate,
     }
 }
 
@@ -538,6 +547,7 @@ fn get_baseline_mut(nt: &mut NeurotransmitterProfile, target: TransmitterTarget)
         TransmitterTarget::Dopamine => &mut nt.dopamine.baseline,
         TransmitterTarget::Norepinephrine => &mut nt.norepinephrine.baseline,
         TransmitterTarget::Gaba => &mut nt.gaba.baseline,
+        TransmitterTarget::Endocannabinoid => &mut nt.endocannabinoid.baseline,
     }
 }
 
